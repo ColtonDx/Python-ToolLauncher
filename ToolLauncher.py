@@ -34,13 +34,14 @@ def show_popup():
     if not tools:
         return
 
+    height = 100 + len(tools) * 90
     popup = tk.Toplevel()
     popup.title("ToolLauncher")
-    popup.geometry("350x500+600+300")
+    popup.geometry(f"400x{height}+600+300")
     popup.configure(bg="#f0f0f0")
     popup.focus_force()
 
-    tk.Label(popup, text="Launch Tools:", bg="#f0f0f0", font=("Segoe UI", 12, "bold")).pack(pady=10)
+    tk.Label(popup, text="Launch Tools:", bg="#f0f0f0", font=("Segoe UI", 12, "bold")).pack(pady=(10, 5))
 
     for label, url, desc in tools:
         frame = tk.Frame(popup, bg="#f0f0f0")
@@ -48,9 +49,10 @@ def show_popup():
 
         tk.Label(frame, text=label, font=("Segoe UI", 10, "bold"), anchor="w", bg="#f0f0f0").pack(fill=tk.X)
         tk.Label(frame, text=desc, font=("Segoe UI", 9), fg="gray", anchor="w", bg="#f0f0f0").pack(fill=tk.X)
-        tk.Button(frame, text="Open", command=lambda u=url: (webbrowser.open(u), popup.destroy())).pack(pady=2)
 
-    tk.Button(popup, text="Cancel", command=popup.destroy).pack(fill=tk.X, padx=20, pady=10)
+        btn = tk.Button(frame, text="Launch", width=15, command=lambda u=url: (webbrowser.open(u), popup.destroy()))
+        btn.pack(pady=4)
+
     popup.bind("<Escape>", lambda e: popup.destroy())
 
 # === Tray Icon ===
