@@ -9,7 +9,7 @@ import keyboard
 import os
 import sys
 
-HOTKEY = "ctrl+shift+v"
+HOTKEY = "ctrl+shift+b"
 CONFIG_FILE = "ToolLauncher.conf"
 ICON_FILE = "ToolLauncher_Logo.ico"
 
