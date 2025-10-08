@@ -23,7 +23,11 @@ def resource_path(filename):
 def load_tools():
     try:
         config = configparser.ConfigParser()
-        config.read(resource_path(CONFIG_FILE))
+        # Use executable folder if frozen, else script folder
+        base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
+        config_path = os.path.join(base_dir, CONFIG_FILE)
+        config.read(config_path)
+
         tools = []
         for section in config.sections():
             label = config.get(section, "label", fallback=None)
@@ -36,6 +40,7 @@ def load_tools():
     except Exception as e:
         print(f"[ToolLauncher] Error loading config: {e}")
         return []
+
 
 # === GUI Popup ===
 def launch_popup():
