@@ -64,8 +64,13 @@ def exit_app(icon, item):
     root.quit()
     sys.exit()
 
+def resource_path(filename):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, filename)
+    return os.path.join(os.path.abspath(os.path.dirname(__file__)), filename)
+
 def create_tray_icon():
-    image = Image.open("ToolLauncher_Logo.ico")  # Replace with your icon path
+    image = Image.open(resource_path("ToolLauncher_Logo.ico"))
     menu = (
         item("Open Config", open_config),
         item("Exit", exit_app)
