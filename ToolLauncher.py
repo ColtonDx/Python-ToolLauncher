@@ -20,30 +20,35 @@ def load_tools():
     for section in config.sections():
         label = config.get(section, "label", fallback=None)
         url = config.get(section, "url", fallback=None)
+        desc = config.get(section, "description", fallback="")
         if label and url:
-            tools.append((label, url))
+            tools.append((label, url, desc))
     return tools
 
 # === GUI Popup ===
 def launch_popup():
+    root.after(0, show_popup)
+
+def show_popup():
     tools = load_tools()
     if not tools:
         return
 
     popup = tk.Toplevel()
     popup.title("ToolLauncher")
-    popup.geometry("300x400+600+300")
+    popup.geometry("350x500+600+300")
     popup.configure(bg="#f0f0f0")
     popup.focus_force()
 
     tk.Label(popup, text="Launch Tools:", bg="#f0f0f0", font=("Segoe UI", 12, "bold")).pack(pady=10)
 
-    for label, url in tools:
-        tk.Button(
-            popup,
-            text=label,
-            command=lambda u=url: (webbrowser.open(u), popup.destroy())
-        ).pack(fill=tk.X, padx=20, pady=5)
+    for label, url, desc in tools:
+        frame = tk.Frame(popup, bg="#f0f0f0")
+        frame.pack(fill=tk.X, padx=20, pady=5)
+
+        tk.Label(frame, text=label, font=("Segoe UI", 10, "bold"), anchor="w", bg="#f0f0f0").pack(fill=tk.X)
+        tk.Label(frame, text=desc, font=("Segoe UI", 9), fg="gray", anchor="w", bg="#f0f0f0").pack(fill=tk.X)
+        tk.Button(frame, text="Open", command=lambda u=url: (webbrowser.open(u), popup.destroy())).pack(pady=2)
 
     tk.Button(popup, text="Cancel", command=popup.destroy).pack(fill=tk.X, padx=20, pady=10)
     popup.bind("<Escape>", lambda e: popup.destroy())
