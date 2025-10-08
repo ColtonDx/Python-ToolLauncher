@@ -21,25 +21,31 @@ def resource_path(filename):
 
 # === Load Config ===
 def load_tools():
-    config = configparser.ConfigParser()
-    config.read(resource_path(CONFIG_FILE))
-    tools = []
-    for section in config.sections():
-        label = config.get(section, "label", fallback=None)
-        url = config.get(section, "url", fallback=None)
-        desc = config.get(section, "description", fallback="")
-        if label and url:
-            tools.append((label, url, desc))
-    return tools
+    try:
+        config = configparser.ConfigParser()
+        config.read(resource_path(CONFIG_FILE))
+        tools = []
+        for section in config.sections():
+            label = config.get(section, "label", fallback=None)
+            url = config.get(section, "url", fallback=None)
+            desc = config.get(section, "description", fallback="")
+            if label and url:
+                tools.append((label, url, desc))
+        print(f"[ToolLauncher] Loaded {len(tools)} tools from config")
+        return tools
+    except Exception as e:
+        print(f"[ToolLauncher] Error loading config: {e}")
+        return []
 
 # === GUI Popup ===
 def launch_popup():
-    print("Hotkey triggered")  # Debug line
+    print("[ToolLauncher] Hotkey triggered")
     root.after(0, show_popup)
 
 def show_popup():
     tools = load_tools()
     if not tools:
+        print("[ToolLauncher] No tools found in config")
         return
 
     height = 100 + len(tools) * 90
@@ -47,6 +53,7 @@ def show_popup():
     popup.title("ToolLauncher")
     popup.geometry(f"400x{height}+600+300")
     popup.configure(bg="#f0f0f0")
+    popup.attributes("-topmost", True)
     popup.focus_force()
 
     tk.Label(popup, text="Launch Tools:", bg="#f0f0f0", font=("Segoe UI", 12, "bold")).pack(pady=(10, 5))
@@ -73,18 +80,22 @@ def exit_app(icon, item):
     sys.exit()
 
 def create_tray_icon():
-    image = Image.open(resource_path(ICON_FILE))
-    menu = (
-        item("Open Config", open_config),
-        item("Exit", exit_app)
-    )
-    icon = pystray.Icon("ToolLauncher", image, "ToolLauncher", menu)
-    threading.Thread(target=icon.run, daemon=True).start()
+    try:
+        image = Image.open(resource_path(ICON_FILE))
+        menu = (
+            item("Open Config", open_config),
+            item("Exit", exit_app)
+        )
+        icon = pystray.Icon("ToolLauncher", image, "ToolLauncher", menu)
+        threading.Thread(target=icon.run, daemon=True).start()
+        print("[ToolLauncher] Tray icon started")
+    except Exception as e:
+        print(f"[ToolLauncher] Failed to load tray icon: {e}")
 
 # === Hotkey Listener ===
 def start_hotkey_listener():
     keyboard.add_hotkey(HOTKEY, launch_popup)
-    print(f"🛠️ ToolLauncher hotkey active — Press {HOTKEY} to launch.")
+    print(f"[ToolLauncher] Hotkey listener active — Press {HOTKEY} to launch.")
 
 # === Main ===
 root = tk.Tk()
