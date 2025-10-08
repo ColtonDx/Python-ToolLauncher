@@ -4,7 +4,7 @@ ToolLauncher is a lightweight Windows utility that lets you launch your favorite
 
 **Features**
 
-- Hotkey-triggered launcher (default: Ctrl+Shift+V)  
+- Hotkey-triggered launcher (default: Ctrl+Shift+b)  
 - System tray icon with config access and exit  
 - Config-driven tool list with labels, URLs, and descriptions  
 - Dynamic window sizing based on number of tools  
