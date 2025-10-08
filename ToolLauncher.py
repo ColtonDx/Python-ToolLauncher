@@ -9,13 +9,20 @@ import keyboard
 import os
 import sys
 
-CONFIG_FILE = "ToolLauncher.conf"
 HOTKEY = "ctrl+shift+v"
+CONFIG_FILE = "ToolLauncher.conf"
+ICON_FILE = "ToolLauncher_Logo.ico"
+
+# === Resource Path Resolver ===
+def resource_path(filename):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, filename)
+    return os.path.join(os.path.abspath(os.path.dirname(__file__)), filename)
 
 # === Load Config ===
 def load_tools():
     config = configparser.ConfigParser()
-    config.read(CONFIG_FILE)
+    config.read(resource_path(CONFIG_FILE))
     tools = []
     for section in config.sections():
         label = config.get(section, "label", fallback=None)
@@ -27,6 +34,7 @@ def load_tools():
 
 # === GUI Popup ===
 def launch_popup():
+    print("Hotkey triggered")  # Debug line
     root.after(0, show_popup)
 
 def show_popup():
@@ -57,20 +65,15 @@ def show_popup():
 
 # === Tray Icon ===
 def open_config():
-    os.system(f"notepad.exe {CONFIG_FILE}")
+    os.system(f"notepad.exe {resource_path(CONFIG_FILE)}")
 
 def exit_app(icon, item):
     icon.stop()
     root.quit()
     sys.exit()
 
-def resource_path(filename):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, filename)
-    return os.path.join(os.path.abspath(os.path.dirname(__file__)), filename)
-
 def create_tray_icon():
-    image = Image.open(resource_path("ToolLauncher_Logo.ico"))
+    image = Image.open(resource_path(ICON_FILE))
     menu = (
         item("Open Config", open_config),
         item("Exit", exit_app)
@@ -82,7 +85,6 @@ def create_tray_icon():
 def start_hotkey_listener():
     keyboard.add_hotkey(HOTKEY, launch_popup)
     print(f"🛠️ ToolLauncher hotkey active — Press {HOTKEY} to launch.")
-    keyboard.wait()
 
 # === Main ===
 root = tk.Tk()
