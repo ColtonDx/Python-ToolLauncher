@@ -21,22 +21,19 @@ def resource_path(filename):
 
 # === Load Config ===
 def load_tools():
-    try:
-        config = configparser.ConfigParser()
-        base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
-        config_path = os.path.join(base_dir, CONFIG_FILE)
-        config.read(config_path)
+    config = configparser.ConfigParser()
+    base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
+    config_path = os.path.join(base_dir, CONFIG_FILE)
+    config.read(config_path)
 
-        tools = []
-        for section in config.sections():
-            label = config.get(section, "label", fallback=None)
-            url = config.get(section, "url", fallback=None)
-            desc = config.get(section, "description", fallback="")
-            if label and url:
-                tools.append((label, url, desc))
-        return tools
-    except:
-        return []
+    tools = []
+    for section in config.sections():
+        label = config.get(section, "label", fallback=None)
+        url = config.get(section, "url", fallback=None)
+        desc = config.get(section, "description", fallback="")
+        if label and url:
+            tools.append((label, url, desc))
+    return tools
 
 # === GUI Popup ===
 def launch_popup():
@@ -79,16 +76,13 @@ def exit_app(icon, item):
     sys.exit()
 
 def create_tray_icon():
-    try:
-        image = Image.open(resource_path(ICON_FILE))
-        menu = (
-            item("Open Config", open_config),
-            item("Exit", exit_app)
-        )
-        icon = pystray.Icon("ToolLauncher", image, "ToolLauncher", menu)
-        threading.Thread(target=icon.run, daemon=True).start()
-    except:
-        pass
+    image = Image.open(resource_path(ICON_FILE))
+    menu = (
+        item("Open Config", open_config),
+        item("Exit", exit_app)
+    )
+    icon = pystray.Icon("ToolLauncher", image, "ToolLauncher", menu)
+    threading.Thread(target=icon.run, daemon=True).start()
 
 # === Hotkey Listener ===
 def start_hotkey_listener():
