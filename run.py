@@ -1,37 +1,82 @@
 import tkinter as tk
 import configparser
 import webbrowser
+import threading
+import pystray
+from pystray import MenuItem as item
+from PIL import Image
+import keyboard
 import os
+import sys
 
-CONFIG_FILE = "config.conf"
+CONFIG_FILE = "ClipPilot.conf"
+HOTKEY = "ctrl+shift+c"
 
 # === Load Config ===
-if not os.path.exists(CONFIG_FILE):
-    raise FileNotFoundError(f"{CONFIG_FILE} not found. Please create it with tool definitions.")
+def load_tools():
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE)
+    tools = []
+    for section in config.sections():
+        label = config.get(section, "label", fallback=None)
+        url = config.get(section, "url", fallback=None)
+        if label and url:
+            tools.append((label, url))
+    return tools
 
-config = configparser.ConfigParser()
-config.read(CONFIG_FILE)
+# === GUI Popup ===
+def launch_popup():
+    tools = load_tools()
+    if not tools:
+        return
 
-# === GUI ===
-root = tk.Tk()
-root.title("ClipPilot Launcher")
-root.geometry("300x400+600+300")
-root.configure(bg="#f0f0f0")
+    popup = tk.Toplevel()
+    popup.title("ClipPilot Launcher")
+    popup.geometry("300x400+600+300")
+    popup.configure(bg="#f0f0f0")
+    popup.focus_force()
 
-tk.Label(root, text="Launch Tools:", bg="#f0f0f0", font=("Segoe UI", 12, "bold")).pack(pady=10)
+    tk.Label(popup, text="Launch Tools:", bg="#f0f0f0", font=("Segoe UI", 12, "bold")).pack(pady=10)
 
-# === Dynamic Buttons ===
-for section in config.sections():
-    label = config.get(section, "label", fallback=None)
-    url = config.get(section, "url", fallback=None)
-
-    if label and url:
+    for label, url in tools:
         tk.Button(
-            root,
+            popup,
             text=label,
-            command=lambda u=url: webbrowser.open(u)
+            command=lambda u=url: (webbrowser.open(u), popup.destroy())
         ).pack(fill=tk.X, padx=20, pady=5)
 
-tk.Button(root, text="Exit", command=root.quit).pack(fill=tk.X, padx=20, pady=10)
+    tk.Button(popup, text="Cancel", command=popup.destroy).pack(fill=tk.X, padx=20, pady=10)
+    popup.bind("<Escape>", lambda e: popup.destroy())
 
-root.mainloop()
+# === Tray Icon ===
+def open_config():
+    os.system(f"notepad.exe {CONFIG_FILE}")
+
+def exit_app(icon, item):
+    icon.stop()
+    root.quit()
+    sys.exit()
+
+def create_tray_icon():
+    image = Image.open("ClipPilot_Logo.ico")  # Replace with your icon path
+    menu = (
+        item("Open Config", open_config),
+        item("Exit", exit_app)
+    )
+    icon = pystray.Icon("ClipPilot", image, "ClipPilot", menu)
+    threading.Thread(target=icon.run, daemon=True).start()
+
+# === Hotkey Listener ===
+def start_hotkey_listener():
+    keyboard.add_hotkey(HOTKEY, launch_popup)
+    print(f"📋 Hotkey listener active — Press {HOTKEY} to launch.")
+    keyboard.wait()
+
+# === Main ===
+root = tk.Tk()
+root.withdraw()
+
+if __name__ == "__main__":
+    create_tray_icon()
+    threading.Thread(target=start_hotkey_listener, daemon=True).start()
+    root.mainloop()
