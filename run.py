@@ -3,7 +3,7 @@ import configparser
 import webbrowser
 import os
 
-CONFIG_FILE = "ClipPilot.conf"
+CONFIG_FILE = "config.conf"
 
 # === Load Config ===
 if not os.path.exists(CONFIG_FILE):
