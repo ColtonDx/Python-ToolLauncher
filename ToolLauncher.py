@@ -9,8 +9,8 @@ import keyboard
 import os
 import sys
 
-CONFIG_FILE = "ClipPilot.conf"
-HOTKEY = "ctrl+shift+c"
+CONFIG_FILE = "ToolLauncher.conf"
+HOTKEY = "ctrl+shift+v"
 
 # === Load Config ===
 def load_tools():
@@ -31,7 +31,7 @@ def launch_popup():
         return
 
     popup = tk.Toplevel()
-    popup.title("ClipPilot Launcher")
+    popup.title("ToolLauncher")
     popup.geometry("300x400+600+300")
     popup.configure(bg="#f0f0f0")
     popup.focus_force()
@@ -58,18 +58,18 @@ def exit_app(icon, item):
     sys.exit()
 
 def create_tray_icon():
-    image = Image.open("ClipPilot_Logo.ico")  # Replace with your icon path
+    image = Image.open("ToolLauncher_Logo.ico")  # Replace with your icon path
     menu = (
         item("Open Config", open_config),
         item("Exit", exit_app)
     )
-    icon = pystray.Icon("ClipPilot", image, "ClipPilot", menu)
+    icon = pystray.Icon("ToolLauncher", image, "ToolLauncher", menu)
     threading.Thread(target=icon.run, daemon=True).start()
 
 # === Hotkey Listener ===
 def start_hotkey_listener():
     keyboard.add_hotkey(HOTKEY, launch_popup)
-    print(f"📋 Hotkey listener active — Press {HOTKEY} to launch.")
+    print(f"🛠️ ToolLauncher hotkey active — Press {HOTKEY} to launch.")
     keyboard.wait()
 
 # === Main ===
