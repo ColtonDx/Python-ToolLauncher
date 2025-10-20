@@ -10,7 +10,7 @@ import os
 import sys
 import winreg
 
-HOTKEY = "ctrl+shift+b"
+HOTKEY = "ctrl+alt+f"
 CONFIG_FILE = "ToolLauncher.conf"
 ICON_FILE = "ToolLauncher_Logo.ico"
 
@@ -30,6 +30,32 @@ def resource_path(filename):
         return os.path.join(sys._MEIPASS, filename)
     return os.path.join(os.path.abspath(os.path.dirname(__file__)), filename)
 
+# === Launch Handler ===
+def launch_tool(target):
+    """Launch either a URL or an executable."""
+    if target.lower().startswith(('http://', 'https://', 'www.')):
+        # Handle URLs
+        webbrowser.open(target)
+    else:
+        # Handle executable paths
+        try:
+            # Resolve relative paths from the config file location
+            if not os.path.isabs(target):
+                base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
+                target = os.path.join(base_dir, target)
+            
+            # Use startfile on Windows, subprocess for other platforms
+            if sys.platform == 'win32':
+                os.startfile(target)
+            else:
+                # For Linux/Mac, use appropriate open command
+                if sys.platform == 'darwin':  # macOS
+                    os.system(f'open "{target}"')
+                else:  # Linux
+                    os.system(f'xdg-open "{target}"')
+        except Exception as e:
+            print(f"Error launching {target}: {e}")
+
 # === Load Config ===
 def load_tools():
     config = configparser.ConfigParser()
@@ -39,11 +65,19 @@ def load_tools():
 
     tools = []
     for section in config.sections():
-        label = config.get(section, "label", fallback=None)
-        url = config.get(section, "url", fallback=None)
+        # Use section name as label, but allow override with explicit label
+        label = config.get(section, "label", fallback=section)
+        
+        # Try url first, then path, then command
+        target = (config.get(section, "url", fallback=None) or
+                 config.get(section, "path", fallback=None) or
+                 config.get(section, "command", fallback=None))
         desc = config.get(section, "description", fallback="")
-        if label and url:
-            tools.append((label, url, desc))
+        category = config.get(section, "category", fallback="")
+        
+        # Only require target now, since label will always have a value
+        if target:
+            tools.append((label, target, desc, category))
     return tools
 
 # === GUI Popup ===
@@ -55,31 +89,149 @@ def show_popup():
     if not tools:
         return
 
+    # Group tools by category (empty category -> "General")
+    categories = {}
+    for label, url, desc, category in tools:
+        key = category.strip() if category and category.strip() else "General"
+        categories.setdefault(key, []).append((label, url, desc))
+
     dark = is_dark_mode()
     bg_color = "#1e1e1e" if dark else "#f0f0f0"
     fg_color = "#ffffff" if dark else "#000000"
     subtext_color = "#aaaaaa" if dark else "gray"
 
-    height = 100 + len(tools) * 90
+    # Calculate max width needed for each category's content
+    col_padding = 20
+    min_col_width = 200  # Minimum width per column
+    num_cols = max(1, len(categories))
+    
+    # First pass: calculate needed width for each category
+    col_widths = {}
+    for cat, items in categories.items():
+        # Get max width needed for this category's items
+        cat_width = len(cat) * 10  # Estimate pixels needed for category name
+        for label, _, desc in items:
+            # Estimate pixels needed for longest line (label or description)
+            item_width = max(len(label) * 8, len(desc) * 6)  # Rough pixel estimate
+            cat_width = max(cat_width, item_width)
+        col_widths[cat] = max(min_col_width, cat_width + 40)  # Add padding
+    
+    # compute max rows and total width
+    max_rows = max(len(items) for items in categories.values())
+    height = 100 + max_rows * 90
+    width = sum(col_widths.values()) + (num_cols + 1) * col_padding
+
     popup = tk.Toplevel()
     popup.title("ToolLauncher")
-    popup.geometry(f"320x{height}+600+300")
+    # place near center-ish; geometry requires int
+    popup.geometry(f"{int(width)}x{int(height)}+600+300")
     popup.configure(bg=bg_color)
     popup.attributes("-topmost", True)
     popup.focus_force()
 
-    tk.Label(popup, text="Launch Tools:", bg=bg_color, fg=fg_color, font=("Segoe UI", 12, "bold")).pack(pady=(10, 5))
+    header = tk.Label(popup, text="Launch Tools:", bg=bg_color, fg=fg_color, font=("Segoe UI", 14, "bold"))
+    header.pack(pady=(10, 15))
 
-    for label, url, desc in tools:
-        frame = tk.Frame(popup, bg=bg_color)
-        frame.pack(fill=tk.X, padx=20, pady=5)
+    content_frame = tk.Frame(popup, bg=bg_color)
+    content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        tk.Label(frame, text=label, font=("Segoe UI", 10, "bold"), anchor="w", bg=bg_color, fg=fg_color).pack(fill=tk.X)
-        tk.Label(frame, text=desc, font=("Segoe UI", 9), fg=subtext_color, anchor="w", bg=bg_color).pack(fill=tk.X)
+    # Create a column for each category
+    for col_index, (cat, items) in enumerate(categories.items()):
+        col_frame = tk.Frame(content_frame, bg=bg_color)
+        col_frame.grid(row=0, column=col_index, sticky="n", padx=(10, 10))
 
-        btn = tk.Button(frame, text="Launch", width=15, command=lambda u=url: (webbrowser.open(u), popup.destroy()))
-        btn.pack(pady=4)
+        # Category header with underline
+        cat_label = tk.Label(col_frame, text=cat, 
+                            font=("Segoe UI", 12, "bold"), 
+                            bg=bg_color, fg=fg_color)
+        cat_label.pack(anchor="w", pady=(0, 2))
+        
+        # Simple underline
+        tk.Frame(col_frame, height=1, 
+                bg="#404040" if dark else "#cccccc").pack(fill=tk.X, pady=(0, 12))
 
+        # Calculate fixed box dimensions based on column width
+        box_width = col_widths[cat] - 20  # Account for padding
+        box_height = 80  # Fixed height for all boxes
+        
+        for label, url, desc in items:
+            # Create clickable frame with border and fixed size
+            tool_frame = tk.Frame(col_frame, bg=bg_color, relief="solid",
+                                borderwidth=1, cursor="hand2",
+                                width=box_width, height=box_height)
+            tool_frame.pack(pady=4)
+            tool_frame.pack_propagate(False)  # Maintain fixed size
+            
+            # Border color
+            border_color = "#404040" if dark else "#dddddd"
+            tool_frame.configure(highlightbackground=border_color,
+                               highlightthickness=1)
+            
+            # Inner padding frame
+            inner_frame = tk.Frame(tool_frame, bg=bg_color)
+            inner_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
+            
+            # Labels with wrapping
+            title_label = tk.Label(inner_frame, text=label, 
+                                 font=("Segoe UI", 10, "bold"),
+                                 anchor="w", bg=bg_color, fg=fg_color,
+                                 wraplength=box_width - 20)  # Account for padding
+            title_label.pack(fill=tk.X)
+            
+            desc_frame = tk.Frame(inner_frame, bg=bg_color)
+            desc_frame.pack(fill=tk.BOTH, expand=True)
+            
+            desc_label = tk.Label(desc_frame, text=desc, 
+                                font=("Segoe UI", 9),
+                                fg=subtext_color, anchor="nw", 
+                                justify=tk.LEFT, bg=bg_color,
+                                wraplength=box_width - 20)  # Account for padding
+            desc_label.pack(fill=tk.BOTH, expand=True)
+            
+            # Bind click and hover events
+            def on_click(target=url):
+                launch_tool(target)
+                popup.destroy()
+            
+            def on_enter(e, frame=tool_frame):
+                hover_bg = "#2d2d2d" if dark else "#e8e8e8"
+                frame.configure(bg=hover_bg)
+                for widget in frame.winfo_children():
+                    widget.configure(bg=hover_bg)
+                    for subwidget in widget.winfo_children():
+                        subwidget.configure(bg=hover_bg)
+                    # Handle nested frames (desc_frame)
+                    if isinstance(widget, tk.Frame):
+                        for sub in widget.winfo_children():
+                            sub.configure(bg=hover_bg)
+            
+            def on_leave(e, frame=tool_frame):
+                frame.configure(bg=bg_color)
+                for widget in frame.winfo_children():
+                    widget.configure(bg=bg_color)
+                    for subwidget in widget.winfo_children():
+                        subwidget.configure(bg=bg_color)
+                    # Handle nested frames (desc_frame)
+                    if isinstance(widget, tk.Frame):
+                        for sub in widget.winfo_children():
+                            sub.configure(bg=bg_color)
+            
+            # Bind events to the main frame
+            tool_frame.bind("<Button-1>", lambda e, u=url: on_click(u))
+            tool_frame.bind("<Enter>", on_enter)
+            tool_frame.bind("<Leave>", on_leave)
+            
+            # Make all widgets in the hierarchy clickable
+            def make_clickable(widget):
+                widget.bind("<Button-1>", lambda e, u=url: on_click(u))
+                widget.bind("<Enter>", lambda e, f=tool_frame: on_enter(e, f))
+                widget.bind("<Leave>", lambda e, f=tool_frame: on_leave(e, f))
+                widget.configure(cursor="hand2")
+                if isinstance(widget, tk.Frame):
+                    for child in widget.winfo_children():
+                        make_clickable(child)
+            
+            make_clickable(inner_frame)
 
     popup.bind("<Escape>", lambda e: popup.destroy())
 
