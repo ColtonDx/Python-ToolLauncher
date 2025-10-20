@@ -30,6 +30,32 @@ def resource_path(filename):
         return os.path.join(sys._MEIPASS, filename)
     return os.path.join(os.path.abspath(os.path.dirname(__file__)), filename)
 
+# === Launch Handler ===
+def launch_tool(target):
+    """Launch either a URL or an executable."""
+    if target.lower().startswith(('http://', 'https://', 'www.')):
+        # Handle URLs
+        webbrowser.open(target)
+    else:
+        # Handle executable paths
+        try:
+            # Resolve relative paths from the config file location
+            if not os.path.isabs(target):
+                base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
+                target = os.path.join(base_dir, target)
+            
+            # Use startfile on Windows, subprocess for other platforms
+            if sys.platform == 'win32':
+                os.startfile(target)
+            else:
+                # For Linux/Mac, use appropriate open command
+                if sys.platform == 'darwin':  # macOS
+                    os.system(f'open "{target}"')
+                else:  # Linux
+                    os.system(f'xdg-open "{target}"')
+        except Exception as e:
+            print(f"Error launching {target}: {e}")
+
 # === Load Config ===
 def load_tools():
     config = configparser.ConfigParser()
@@ -39,12 +65,19 @@ def load_tools():
 
     tools = []
     for section in config.sections():
-        label = config.get(section, "label", fallback=None)
-        url = config.get(section, "url", fallback=None)
+        # Use section name as label, but allow override with explicit label
+        label = config.get(section, "label", fallback=section)
+        
+        # Try url first, then path, then command
+        target = (config.get(section, "url", fallback=None) or
+                 config.get(section, "path", fallback=None) or
+                 config.get(section, "command", fallback=None))
         desc = config.get(section, "description", fallback="")
         category = config.get(section, "category", fallback="")
-        if label and url:
-            tools.append((label, url, desc, category))
+        
+        # Only require target now, since label will always have a value
+        if target:
+            tools.append((label, target, desc, category))
     return tools
 
 # === GUI Popup ===
@@ -156,8 +189,8 @@ def show_popup():
             desc_label.pack(fill=tk.BOTH, expand=True)
             
             # Bind click and hover events
-            def on_click(u=url):
-                webbrowser.open(u)
+            def on_click(target=url):
+                launch_tool(target)
                 popup.destroy()
             
             def on_enter(e, frame=tool_frame):
