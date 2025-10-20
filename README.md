@@ -24,7 +24,7 @@ ToolLauncher is a lightweight Windows utility that lets you launch your favorite
 
 **Config Format**
 
-ToolLauncher.conf should use INI format. Each section defines a tool with a label, URL, and optional description.
+ToolLauncher.conf should use INI format. Each section defines a tool with a URL or Path, optional label, and optional description. Tools will be in columns defined by the category.
 
 Example:
 
@@ -32,16 +32,22 @@ Example:
 label = Azure Portal  
 url = https://portal.azure.com  
 description = Manage cloud resources and subscriptions  
+category = Cloud
 
-[Tool2]  
-label = GitHub  
+[GitHub]  
 url = https://github.com  
 description = Access repositories and version control  
+category = Code
+
+[Tool3]
+path = C:\Windows\System32\calc.exe
+description = Windows Calculator
+category = Apps
 
 **Usage**
 
 - Run `ToolLauncher.py`  
-- Press Ctrl+Shift+V to open the launcher  
+- Press Ctrl+alt+f to open the launcher  
 - Click any "Launch" button to open the corresponding URL  
 - Use the tray icon to open the config or exit the app  
 
