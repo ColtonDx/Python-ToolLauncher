@@ -10,7 +10,7 @@ import os
 import sys
 import winreg
 
-HOTKEY = "ctrl+shift+b"
+HOTKEY = "ctrl+alt+f"
 CONFIG_FILE = "ToolLauncher.conf"
 ICON_FILE = "ToolLauncher_Logo.ico"
 
