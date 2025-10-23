@@ -10,9 +10,11 @@ import os
 import sys
 import winreg
 
-HOTKEY = "ctrl+alt+f"
+DEFAULT_HOTKEY = "ctrl+alt+f"  # Default hotkey if not specified in config
 CONFIG_FILE = "ToolLauncher.conf"
 ICON_FILE = "ToolLauncher_Logo.ico"
+CURRENT_POPUP = None  # Track the current popup window
+CURRENT_HOTKEY = DEFAULT_HOTKEY  # Will be updated from config if specified
 
 # === Check if Windows is in Dark Mode ===
 def is_dark_mode():
@@ -58,13 +60,33 @@ def launch_tool(target):
 
 # === Load Config ===
 def load_tools():
+    global CURRENT_HOTKEY
+    
     config = configparser.ConfigParser()
     base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
     config_path = os.path.join(base_dir, CONFIG_FILE)
+    print(f"Loading config from: {config_path}")
+    
+    # Check if config file exists
+    if not os.path.exists(config_path):
+        print(f"Config file not found at: {config_path}")
+        return []
+    
     config.read(config_path)
-
+    print(f"Sections found in config: {config.sections()}")
+    
+    # Get settings if specified in [Settings] section
+    if 'Settings' in config:
+        print("Found Settings section")
+        # Update hotkey if specified
+        hotkey = config['Settings'].get('hotkey', DEFAULT_HOTKEY)
+        print(f"Settings - Hotkey: {hotkey}")
+        if hotkey != CURRENT_HOTKEY:
+            update_hotkey(hotkey)
+    
     tools = []
-    for section in config.sections():
+    # Skip Settings section when processing tools
+    for section in [s for s in config.sections() if s != 'Settings']:
         # Use section name as label, but allow override with explicit label
         label = config.get(section, "label", fallback=section)
         
@@ -85,6 +107,12 @@ def launch_popup():
     root.after(0, show_popup)
 
 def show_popup():
+    global CURRENT_POPUP
+    
+    # If there's an existing popup, destroy it
+    if CURRENT_POPUP is not None and CURRENT_POPUP.winfo_exists():
+        CURRENT_POPUP.destroy()
+    
     tools = load_tools()
     if not tools:
         return
@@ -121,18 +149,18 @@ def show_popup():
     height = 100 + max_rows * 90
     width = sum(col_widths.values()) + (num_cols + 1) * col_padding
 
-    popup = tk.Toplevel()
-    popup.title("ToolLauncher")
+    CURRENT_POPUP = tk.Toplevel()
+    CURRENT_POPUP.title("ToolLauncher")
     # place near center-ish; geometry requires int
-    popup.geometry(f"{int(width)}x{int(height)}+600+300")
-    popup.configure(bg=bg_color)
-    popup.attributes("-topmost", True)
-    popup.focus_force()
+    CURRENT_POPUP.geometry(f"{int(width)}x{int(height)}+600+300")
+    CURRENT_POPUP.configure(bg=bg_color)
+    CURRENT_POPUP.attributes("-topmost", True)
+    CURRENT_POPUP.focus_force()
 
-    header = tk.Label(popup, text="Launch Tools:", bg=bg_color, fg=fg_color, font=("Segoe UI", 14, "bold"))
+    header = tk.Label(CURRENT_POPUP, text="Launch Tools:", bg=bg_color, fg=fg_color, font=("Segoe UI", 14, "bold"))
     header.pack(pady=(10, 15))
 
-    content_frame = tk.Frame(popup, bg=bg_color)
+    content_frame = tk.Frame(CURRENT_POPUP, bg=bg_color)
     content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
     # Create a column for each category
@@ -191,7 +219,7 @@ def show_popup():
             # Bind click and hover events
             def on_click(target=url):
                 launch_tool(target)
-                popup.destroy()
+                CURRENT_POPUP.destroy()
             
             def on_enter(e, frame=tool_frame):
                 hover_bg = "#2d2d2d" if dark else "#e8e8e8"
@@ -233,7 +261,7 @@ def show_popup():
             
             make_clickable(inner_frame)
 
-    popup.bind("<Escape>", lambda e: popup.destroy())
+    CURRENT_POPUP.bind("<Escape>", lambda e: CURRENT_POPUP.destroy())
 
 # === Tray Icon ===
 def open_config():
@@ -254,8 +282,32 @@ def create_tray_icon():
     threading.Thread(target=icon.run, daemon=True).start()
 
 # === Hotkey Listener ===
+def update_hotkey(new_hotkey):
+    global CURRENT_HOTKEY
+    # Remove old hotkey if it exists
+    try:
+        keyboard.remove_hotkey(CURRENT_HOTKEY)
+    except:
+        pass
+    # Set new hotkey
+    CURRENT_HOTKEY = new_hotkey
+    keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
+    print(f"ToolLauncher hotkey updated to: {CURRENT_HOTKEY}")
+
 def start_hotkey_listener():
-    keyboard.add_hotkey(HOTKEY, launch_popup)
+    # Load config first to get initial hotkey
+    config = configparser.ConfigParser()
+    config_path = resource_path(CONFIG_FILE)
+    if os.path.exists(config_path):
+        config.read(config_path)
+        if 'Settings' in config:
+            initial_hotkey = config['Settings'].get('hotkey', DEFAULT_HOTKEY)
+        else:
+            initial_hotkey = DEFAULT_HOTKEY
+    else:
+        initial_hotkey = DEFAULT_HOTKEY
+    
+    update_hotkey(initial_hotkey)
 
 # === Main ===
 root = tk.Tk()
