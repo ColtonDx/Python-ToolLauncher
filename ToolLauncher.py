@@ -65,22 +65,14 @@ def load_tools():
     config = configparser.ConfigParser()
     base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
     config_path = os.path.join(base_dir, CONFIG_FILE)
-    print(f"Loading config from: {config_path}")
-    
     # Check if config file exists
     if not os.path.exists(config_path):
-        print(f"Config file not found at: {config_path}")
         return []
-    
     config.read(config_path)
-    print(f"Sections found in config: {config.sections()}")
-    
     # Get settings if specified in [Settings] section
     if 'Settings' in config:
-        print("Found Settings section")
         # Update hotkey if specified
         hotkey = config['Settings'].get('hotkey', DEFAULT_HOTKEY)
-        print(f"Settings - Hotkey: {hotkey}")
         if hotkey != CURRENT_HOTKEY:
             update_hotkey(hotkey)
     
