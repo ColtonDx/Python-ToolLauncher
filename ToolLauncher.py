@@ -15,6 +15,7 @@ CONFIG_FILE = "ToolLauncher.conf"
 ICON_FILE = "ToolLauncher_Logo.ico"
 CURRENT_POPUP = None  # Track the current popup window
 CURRENT_HOTKEY = DEFAULT_HOTKEY  # Will be updated from config if specified
+CURRENT_HOTKEY_HANDLE = None  # Handler returned by keyboard.add_hotkey
 
 # === Check if Windows is in Dark Mode ===
 def is_dark_mode():
@@ -63,8 +64,8 @@ def load_tools():
     global CURRENT_HOTKEY
     
     config = configparser.ConfigParser()
-    base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
-    config_path = os.path.join(base_dir, CONFIG_FILE)
+    # Use a unified config lookup so both startup and popup use the same file
+    config_path = get_config_path()
     # Check if config file exists
     if not os.path.exists(config_path):
         return []
@@ -276,30 +277,54 @@ def create_tray_icon():
 # === Hotkey Listener ===
 def update_hotkey(new_hotkey):
     global CURRENT_HOTKEY
+    global CURRENT_HOTKEY_HANDLE
     # Remove old hotkey if it exists
     try:
-        keyboard.remove_hotkey(CURRENT_HOTKEY)
+        # Try removing by handler first (preferred), then by string
+        if CURRENT_HOTKEY_HANDLE is not None:
+            keyboard.remove_hotkey(CURRENT_HOTKEY_HANDLE)
+            CURRENT_HOTKEY_HANDLE = None
+        else:
+            keyboard.remove_hotkey(CURRENT_HOTKEY)
     except:
         pass
     # Set new hotkey
     CURRENT_HOTKEY = new_hotkey
-    keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
+    try:
+        CURRENT_HOTKEY_HANDLE = keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
+    except Exception:
+        # Fallback: try adding without storing handle
+        keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
+        CURRENT_HOTKEY_HANDLE = None
     print(f"ToolLauncher hotkey updated to: {CURRENT_HOTKEY}")
 
 def start_hotkey_listener():
-    # Load config first to get initial hotkey
-    config = configparser.ConfigParser()
-    config_path = resource_path(CONFIG_FILE)
-    if os.path.exists(config_path):
-        config.read(config_path)
-        if 'Settings' in config:
-            initial_hotkey = config['Settings'].get('hotkey', DEFAULT_HOTKEY)
-        else:
-            initial_hotkey = DEFAULT_HOTKEY
-    else:
-        initial_hotkey = DEFAULT_HOTKEY
-    
-    update_hotkey(initial_hotkey)
+    # Ensure the configured hotkey is loaded at startup by reusing load_tools()
+    try:
+        # load_tools() will call update_hotkey() if a hotkey is present in the config
+        load_tools()
+    except Exception:
+        # If anything goes wrong, fall back to DEFAULT_HOTKEY
+        update_hotkey(DEFAULT_HOTKEY)
+
+    # If no hotkey was set by load_tools (no config or no Settings), ensure a hotkey exists
+    if CURRENT_HOTKEY is None:
+        update_hotkey(DEFAULT_HOTKEY)
+
+
+# === Helper: unified config path lookup ===
+def get_config_path():
+    # Try current working directory first, then packaged resource, then frozen exe dir
+    candidates = [
+        os.path.join(os.getcwd(), CONFIG_FILE),
+        resource_path(CONFIG_FILE),
+        os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__), CONFIG_FILE)
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    # Default to resource path if none exist
+    return resource_path(CONFIG_FILE)
 
 # === Main ===
 root = tk.Tk()
