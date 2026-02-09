@@ -1,0 +1,264 @@
+================================================================================
+PYTHON TOOLAUNCHER - PROJECT MANIFEST
+================================================================================
+Last Updated: February 2026
+Purpose: Context documentation for AI-assisted development sessions
+
+================================================================================
+PROJECT OVERVIEW
+================================================================================
+
+ToolLauncher is a lightweight Windows desktop utility that functions as a 
+hotkey-triggered dashboard for launching tools and accessing resources. It 
+minimizes to the system tray and pops up a GUI window when the configured 
+hotkey is pressed (default: Ctrl+Alt+F).
+
+Core Functionality:
+- Hotkey listener that triggers a dashboard popup window
+- Configuration-driven tool/link management (reads from .conf file)
+- Dark mode support (detects Windows system theme)
+- System tray integration with menu options
+- Multi-platform launcher (URLs, executables, commands)
+- Dynamic UI layout with category-based columns
+
+================================================================================
+ARCHITECTURE & CODE STRUCTURE
+================================================================================
+
+The application uses a single-file Python architecture with the following 
+functional modules:
+
+1. CONFIGURATION & RESOURCE MANAGEMENT
+   - load_tools(): Reads ToolLauncher.conf and parses tool definitions
+   - resource_path(): Resolves file paths for both frozen (exe) and dev environments
+   - Config sections: Each [Tool] section contains: label, url/path/command, 
+                     description, category
+
+2. DARK MODE DETECTION
+   - is_dark_mode(): Queries Windows registry to detect system theme preference
+   - Used to adjust UI colors dynamically
+
+3. LAUNCH HANDLER
+   - launch_tool(): Universal launcher that handles:
+     * URLs (http://, https://, www.) → Opens in default browser
+     * Executables (.exe, scripts) → Launches via os.startfile (Windows)
+     * Commands → Executes via system command
+
+4. GUI POPUP SYSTEM
+   - launch_popup() / show_popup(): Creates and displays the main window
+   - Category-based column layout (tools grouped by "category" field)
+   - Responsive design with hover effects
+   - Fixed-size tool boxes with wrapped text labels/descriptions
+   - Click handlers on all tool boxes
+   - Escape key to close popup
+   - CURRENT_POPUP global tracks active window to prevent duplicates
+
+5. SYSTEM TRAY INTEGRATION
+   - create_tray_icon(): Creates pystray icon with menu
+   - Menu options: "Open Config" (opens in Notepad), "Exit"
+   - Runs in daemon thread to avoid blocking main thread
+
+6. HOTKEY LISTENER
+   - update_hotkey(): Registers/unregisters keyboard hotkey
+   - start_hotkey_listener(): Loads initial hotkey from config
+   - Uses 'keyboard' library for global hotkey detection
+   - CURRENT_HOTKEY global stores active hotkey binding
+   - Fallback to DEFAULT_HOTKEY (Ctrl+Alt+F) if not specified
+
+7. APPLICATION LIFECYCLE
+   - root = tk.Tk() creates hidden main window (withdrawn)
+   - Main thread runs tkinter mainloop (required for event handling)
+   - Hotkey and tray threads run as daemons
+
+================================================================================
+CONFIGURATION FILE FORMAT (ToolLauncher.conf)
+================================================================================
+
+INI-style configuration with two section types:
+
+[Settings] (Optional)
+  - hotkey = <key_combination>  (e.g., "ctrl+alt+f", "shift+alt+d")
+
+[ToolName] (Multiple sections, one per tool)
+  - label = <display name>                (optional; defaults to section name)
+  - url = <https://example.com>           (for web links)
+  - path = <C:\Program Files\app.exe>     (for local executables)
+  - command = <executable_name>            (for system commands)
+  - description = <short description>      (shown under label)
+  - category = <category_name>             (groups tools in columns)
+
+Note: Each tool needs ONE of: url, path, or command
+Note: If category is empty/omitted, tool goes to "General" category
+
+Example entries present in config:
+  [Google] - URL launcher
+  [Calculator] - Path launcher (calc.exe)
+  [VS Code] - Path launcher (code.exe)
+  [terminal] - Command launcher (cmd.exe)
+
+================================================================================
+DEPENDENCIES
+================================================================================
+
+Required Packages:
+- tkinter          (standard library, UI framework)
+- configparser     (standard library, config file parsing)
+- webbrowser       (standard library, URL launching)
+- threading        (standard library, concurrent execution)
+- os, sys          (standard library, system interaction)
+- winreg           (Windows-only, registry access for dark mode)
+- pystray          (PyPI: system tray icon)
+- pillow/PIL       (PyPI: image handling for tray icon)
+- keyboard         (PyPI: global hotkey detection)
+
+External Files Required:
+- ToolLauncher.conf (configuration file)
+- ToolLauncher_Logo.ico (system tray icon)
+
+================================================================================
+KEY GLOBALS
+================================================================================
+
+DEFAULT_HOTKEY = "ctrl+alt+f"
+  - Fallback hotkey if not specified in config
+
+CONFIG_FILE = "ToolLauncher.conf"
+  - Configuration filename to load
+
+ICON_FILE = "ToolLauncher_Logo.ico"
+  - Tray icon filename
+
+CURRENT_POPUP = None
+  - Tracks the active popup window (prevents multiple windows)
+
+CURRENT_HOTKEY = DEFAULT_HOTKEY
+  - Stores the currently active hotkey binding
+  - Updated by update_hotkey() when config changes
+
+root = tk.Tk()
+  - Hidden main tkinter window (required for event loop)
+  - Withdrawn (invisible) but processes events
+
+================================================================================
+USER WORKFLOW
+================================================================================
+
+1. User launches ToolLauncher.py
+   → Creates hidden root window
+   → Creates system tray icon with menu
+   → Starts hotkey listener thread
+   → Starts event loop
+
+2. User presses configured hotkey (default: Ctrl+Alt+F)
+   → Hotkey listener triggers launch_popup()
+   → show_popup() loads tools from config
+   → Organizes tools by category into columns
+   → Creates Toplevel window with tool buttons
+   → Window set to stay on top and grab focus
+   → Window positioned at +600+300 relative to screen
+
+3. User clicks a tool button
+   → on_click() handler calls launch_tool(target)
+   → Tool launched based on type (URL, path, command)
+   → Popup window destroyed
+
+4. User interacts with tray icon
+   → "Open Config" → Opens ToolLauncher.conf in Notepad
+   → "Exit" → Stops icon, quits mainloop, exits application
+
+================================================================================
+VISUAL DESIGN
+================================================================================
+
+Color Scheme:
+  Dark Mode:
+    - Background: #1e1e1e (very dark gray)
+    - Text: #ffffff (white)
+    - Hover: #2d2d2d (slightly lighter dark gray)
+    - Borders: #404040 (dark gray)
+    - Subtext: #aaaaaa (medium gray)
+  
+  Light Mode:
+    - Background: #f0f0f0 (light gray)
+    - Text: #000000 (black)
+    - Hover: #e8e8e8 (slightly darker light gray)
+    - Borders: #cccccc (medium gray)
+    - Subtext: gray (standard)
+
+Layout:
+  - Header: "Launch Tools:" title (Segoe UI, 14pt bold)
+  - Content: Columns for each category (max items determines window height)
+  - Category headers: Bold, underlined with 1px line
+  - Tool boxes: Fixed-size frames with border, padding, and hover effect
+  - Text wrapping: Labels and descriptions wrap at calculated widths
+
+Dynamic Sizing:
+  - Window width calculated from number of categories and max label/desc length
+  - Each column gets minimum 200px width, plus estimated text width
+  - Window height: 100px header + (max_items * 90px per item)
+  - Positioned at +600+300 (center-ish on 1080p screen)
+
+Interactions:
+  - Hover: Background color changes, all child widgets update
+  - Click: Launches tool, destroys popup
+  - Escape key: Closes popup
+  - Focus: Window stays on top (-topmost) and grabs focus
+
+================================================================================
+DEVELOPMENT NOTES & FUTURE ENHANCEMENTS
+================================================================================
+
+Known Limitations:
+1. Windows-only: Uses os.startfile() for executables (os.system fallback for 
+   Linux/Mac exists but untested). Registry check for dark mode is Windows-only.
+2. Single monitor: Window position hardcoded to +600+300
+3. No persistence: Hotkey changes only persist if saved in config file
+4. No validation: Config file errors silently return empty tool list
+5. Text wrapping: Based on character count estimates, may not wrap perfectly
+
+Potential Improvements:
+1. Multi-monitor support: Detect primary monitor, center window appropriately
+2. Hotkey reload: Watch config file for changes, auto-reload hotkey
+3. Search/filter: Add search box to filter tools by name/description
+4. Recent tools: Track and display most-used tools separately
+5. Custom themes: Allow color customization via config
+6. Drag-and-drop: Reorder tools via config editor integration
+7. Arguments: Support command-line arguments for executables
+8. Variables: Expand environment variables in paths/commands
+9. Platform detection: Full Linux/Mac support with platform-specific launchers
+10. Error reporting: Display user-friendly error messages in popup
+11. Config validation: Validate config on load, warn about issues
+12. Tool icons: Add custom icons per tool in config
+13. Keyboard navigation: Arrow keys to navigate tools, Enter to launch
+14. Customizable layout: Column count, box size configurable
+15. Tool grouping: Sub-categories or tree view for large tool sets
+
+Performance Notes:
+- Config is loaded on each popup (no caching) - acceptable for typical use
+- Hotkey listener runs in separate thread (non-blocking)
+- Tray icon runs in separate thread (non-blocking)
+- Popup creation is fast enough for sub-second response time
+
+Testing Considerations:
+- Windows dark/light mode detection (registry access)
+- Hotkey conflicts with other applications
+- Path resolution with frozen exe (.spec files)
+- Unicode support in labels/descriptions
+- Very long tool lists (memory, rendering performance)
+- Concurrent popups (CURRENT_POPUP mechanism)
+
+================================================================================
+FILE LOCATIONS & RELATIVE PATHS
+================================================================================
+
+When frozen (compiled to exe):
+  - base_dir = sys._MEIPASS (temp extraction directory)
+  - Config/Icon paths resolved relative to exe location
+
+When running as script:
+  - base_dir = directory of __file__ (ToolLauncher.py location)
+  - Config/Icon paths resolved relative to script location
+
+resource_path() handles both cases automatically.
+
+================================================================================
