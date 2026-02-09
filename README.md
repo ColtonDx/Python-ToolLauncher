@@ -27,7 +27,7 @@ ToolLauncher is a lightweight Windows utility that lets you launch your favorite
 ToolLauncher.conf should use INI format. Each section defines a tool with a URL or Path, optional label, and optional description. Tools will be in columns defined by the category.
 
 Example:
-
+```
 [Tool1]  
 label = Azure Portal  
 url = https://portal.azure.com  
@@ -43,7 +43,7 @@ category = Code
 path = C:\Windows\System32\calc.exe
 description = Windows Calculator
 category = Apps
-
+```
 **Usage**
 
 - Run `ToolLauncher.py`  
