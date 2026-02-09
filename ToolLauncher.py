@@ -59,22 +59,17 @@ def launch_tool(target):
             print(f"Error launching {target}: {e}")
 
 # === Load Config ===
+def get_config_path():
+    """Get the full path to the config file."""
+    return resource_path(CONFIG_FILE)
+
 def load_tools():
-    global CURRENT_HOTKEY
-    
     config = configparser.ConfigParser()
-    base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
-    config_path = os.path.join(base_dir, CONFIG_FILE)
+    config_path = get_config_path()
     # Check if config file exists
     if not os.path.exists(config_path):
         return []
     config.read(config_path)
-    # Get settings if specified in [Settings] section
-    if 'Settings' in config:
-        # Update hotkey if specified
-        hotkey = config['Settings'].get('hotkey', DEFAULT_HOTKEY)
-        if hotkey != CURRENT_HOTKEY:
-            update_hotkey(hotkey)
     
     tools = []
     # Skip Settings section when processing tools
@@ -149,8 +144,23 @@ def show_popup():
     CURRENT_POPUP.attributes("-topmost", True)
     CURRENT_POPUP.focus_force()
 
-    header = tk.Label(CURRENT_POPUP, text="Launch Tools:", bg=bg_color, fg=fg_color, font=("Segoe UI", 14, "bold"))
-    header.pack(pady=(10, 15))
+    # Create header frame with title and settings button
+    header_frame = tk.Frame(CURRENT_POPUP, bg=bg_color)
+    header_frame.pack(pady=(10, 15), padx=10, fill=tk.X)
+    
+    header = tk.Label(header_frame, text="Launch Tools:", bg=bg_color, fg=fg_color, font=("Segoe UI", 14, "bold"))
+    header.pack(side=tk.LEFT, expand=True)
+    
+    # Settings button (cog icon)
+    def open_settings():
+        show_settings_dialog(CURRENT_POPUP, dark, bg_color, fg_color)
+    
+    settings_btn = tk.Button(header_frame, text="⚙", bg=bg_color, fg=fg_color, 
+                             font=("Segoe UI", 12), relief=tk.FLAT, 
+                             command=open_settings, cursor="hand2")
+    settings_btn.pack(side=tk.RIGHT, padx=5)
+    settings_btn.configure(activebackground=("#2d2d2d" if dark else "#e8e8e8"))
+    settings_btn.configure(activeforeground=fg_color)
 
     content_frame = tk.Frame(CURRENT_POPUP, bg=bg_color)
     content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
@@ -255,6 +265,156 @@ def show_popup():
 
     CURRENT_POPUP.bind("<Escape>", lambda e: CURRENT_POPUP.destroy())
 
+# === Settings Dialog ===
+def save_config(config):
+    """Save config to file."""
+    config_path = get_config_path()
+    try:
+        with open(config_path, 'w') as f:
+            config.write(f)
+        print("Configuration saved successfully")
+        return True
+    except Exception as e:
+        print(f"Error saving configuration: {e}")
+        return False
+
+def show_settings_dialog(parent_window, dark, bg_color, fg_color):
+    """Show settings dialog for hotkey and adding new tools."""
+    settings_window = tk.Toplevel(parent_window)
+    settings_window.title("Settings")
+    settings_window.geometry("500x600+700+350")
+    settings_window.configure(bg=bg_color)
+    settings_window.attributes("-topmost", True)
+    
+    # Load current config
+    config = configparser.ConfigParser()
+    config_path = get_config_path()
+    if os.path.exists(config_path):
+        config.read(config_path)
+    
+    subtext_color = "#aaaaaa" if dark else "gray"
+    entry_bg = "#2d2d2d" if dark else "#ffffff"
+    entry_fg = "#ffffff" if dark else "#000000"
+    
+    # === Hotkey Section ===
+    hotkey_frame = tk.LabelFrame(settings_window, text="Hotkey Settings", 
+                                 bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold"))
+    hotkey_frame.pack(fill=tk.X, padx=15, pady=10)
+    
+    tk.Label(hotkey_frame, text="Hotkey:", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(10, 3))
+    
+    current_hotkey = get_configured_hotkey()
+    hotkey_entry = tk.Entry(hotkey_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10), width=30)
+    hotkey_entry.insert(0, current_hotkey)
+    hotkey_entry.pack(padx=10, pady=(3, 5), fill=tk.X)
+    
+    tk.Label(hotkey_frame, text="(e.g., ctrl+alt+f, shift+alt+d, ctrl+shift+t)", 
+             bg=bg_color, fg=subtext_color, font=("Segoe UI", 9)).pack(anchor="w", padx=10, pady=(0, 10))
+    
+    # === Add New Tool Section ===
+    tool_frame = tk.LabelFrame(settings_window, text="Add New Tool", 
+                               bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold"))
+    tool_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+    
+    # Create scrollable frame for tool entries
+    canvas = tk.Canvas(tool_frame, bg=bg_color, highlightthickness=0)
+    scrollbar = tk.Scrollbar(tool_frame, orient=tk.VERTICAL, command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg=bg_color)
+    
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+    
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+    
+    # Tool entry fields
+    tk.Label(scrollable_frame, text="Tool Name:", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(10, 3))
+    tool_name_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10))
+    tool_name_entry.pack(padx=10, pady=(3, 10), fill=tk.X)
+    
+    tk.Label(scrollable_frame, text="URL/Path/Command:", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(3, 3))
+    tool_target_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10))
+    tool_target_entry.pack(padx=10, pady=(3, 10), fill=tk.X)
+    
+    tk.Label(scrollable_frame, text="Description (optional):", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(3, 3))
+    tool_desc_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10))
+    tool_desc_entry.pack(padx=10, pady=(3, 10), fill=tk.X)
+    
+    tk.Label(scrollable_frame, text="Category (optional):", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(3, 3))
+    tool_cat_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10))
+    tool_cat_entry.pack(padx=10, pady=(3, 10), fill=tk.X)
+    
+    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    
+    # === Button Frame ===
+    button_frame = tk.Frame(settings_window, bg=bg_color)
+    button_frame.pack(pady=15, fill=tk.X, padx=15)
+    
+    def save_settings():
+        """Save hotkey and new tool to config."""
+        new_hotkey = hotkey_entry.get().strip()
+        
+        # Validate and update hotkey if changed
+        if new_hotkey and new_hotkey != CURRENT_HOTKEY:
+            try:
+                update_hotkey(new_hotkey)
+                if 'Settings' not in config:
+                    config['Settings'] = {}
+                config['Settings']['hotkey'] = new_hotkey
+                print(f"Hotkey updated to: {new_hotkey}")
+            except Exception as e:
+                print(f"Error setting hotkey: {e}")
+        
+        # Add new tool if fields are filled
+        tool_name = tool_name_entry.get().strip()
+        tool_target = tool_target_entry.get().strip()
+        
+        if tool_name and tool_target:
+            # Sanitize section name (remove special characters)
+            safe_name = "".join(c for c in tool_name if c.isalnum() or c in (' ', '_', '-')).strip()
+            if not safe_name:
+                safe_name = "Tool"
+            
+            # Ensure unique section name
+            counter = 1
+            unique_name = safe_name
+            while unique_name in config:
+                unique_name = f"{safe_name}{counter}"
+                counter += 1
+            
+            config[unique_name] = {}
+            config[unique_name]['label'] = tool_name
+            config[unique_name]['url' if tool_target.lower().startswith(('http://', 'https://', 'www.')) else 'path'] = tool_target
+            
+            if tool_desc_entry.get().strip():
+                config[unique_name]['description'] = tool_desc_entry.get().strip()
+            
+            if tool_cat_entry.get().strip():
+                config[unique_name]['category'] = tool_cat_entry.get().strip()
+            
+            print(f"Tool added: {tool_name}")
+        
+        # Save config
+        if save_config(config):
+            settings_window.destroy()
+            # Refresh parent popup
+            if parent_window and parent_window.winfo_exists():
+                parent_window.destroy()
+            show_popup()
+    
+    save_btn = tk.Button(button_frame, text="Save Settings", command=save_settings,
+                        bg="#0e639c" if dark else "#007acc", fg=fg_color,
+                        font=("Segoe UI", 10), relief=tk.FLAT, padx=15, pady=8)
+    save_btn.pack(side=tk.LEFT, padx=5)
+    
+    cancel_btn = tk.Button(button_frame, text="Cancel", command=settings_window.destroy,
+                          bg="#3e3e42" if dark else "#cccccc", fg=fg_color,
+                          font=("Segoe UI", 10), relief=tk.FLAT, padx=15, pady=8)
+    cancel_btn.pack(side=tk.LEFT, padx=5)
+
 # === Tray Icon ===
 def open_config():
     os.system(f"notepad.exe {resource_path(CONFIG_FILE)}")
@@ -267,6 +427,7 @@ def exit_app(icon, item):
 def create_tray_icon():
     image = Image.open(resource_path(ICON_FILE))
     menu = (
+        item("Launch", lambda i, m: launch_popup()),
         item("Open Config", open_config),
         item("Exit", exit_app)
     )
@@ -274,31 +435,43 @@ def create_tray_icon():
     threading.Thread(target=icon.run, daemon=True).start()
 
 # === Hotkey Listener ===
-def update_hotkey(new_hotkey):
-    global CURRENT_HOTKEY
-    # Remove old hotkey if it exists
-    try:
-        keyboard.remove_hotkey(CURRENT_HOTKEY)
-    except:
-        pass
-    # Set new hotkey
-    CURRENT_HOTKEY = new_hotkey
-    keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
-    print(f"ToolLauncher hotkey updated to: {CURRENT_HOTKEY}")
-
-def start_hotkey_listener():
-    # Load config first to get initial hotkey
+def get_configured_hotkey():
+    """Load the hotkey from config file."""
     config = configparser.ConfigParser()
-    config_path = resource_path(CONFIG_FILE)
+    config_path = get_config_path()
     if os.path.exists(config_path):
         config.read(config_path)
         if 'Settings' in config:
-            initial_hotkey = config['Settings'].get('hotkey', DEFAULT_HOTKEY)
-        else:
-            initial_hotkey = DEFAULT_HOTKEY
-    else:
-        initial_hotkey = DEFAULT_HOTKEY
+            hotkey = config['Settings'].get('hotkey', DEFAULT_HOTKEY)
+            if hotkey.strip():  # Ensure it's not empty
+                return hotkey
+    return DEFAULT_HOTKEY
+
+def update_hotkey(new_hotkey):
+    global CURRENT_HOTKEY
+    # Remove old hotkey if it exists and is different
+    if CURRENT_HOTKEY and CURRENT_HOTKEY != new_hotkey:
+        try:
+            keyboard.remove_hotkey(CURRENT_HOTKEY)
+        except Exception as e:
+            print(f"Note: Could not remove previous hotkey {CURRENT_HOTKEY}: {e}")
     
+    # Set new hotkey
+    try:
+        CURRENT_HOTKEY = new_hotkey
+        keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
+        print(f"ToolLauncher hotkey set to: {CURRENT_HOTKEY}")
+    except Exception as e:
+        print(f"Error registering hotkey {new_hotkey}: {e}")
+        # Fallback to default if there's an issue
+        if new_hotkey != DEFAULT_HOTKEY:
+            print(f"Falling back to default hotkey: {DEFAULT_HOTKEY}")
+            CURRENT_HOTKEY = DEFAULT_HOTKEY
+            keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
+
+def start_hotkey_listener():
+    """Initialize and register the hotkey from config."""
+    initial_hotkey = get_configured_hotkey()
     update_hotkey(initial_hotkey)
 
 # === Main ===
@@ -306,6 +479,7 @@ root = tk.Tk()
 root.withdraw()
 
 if __name__ == "__main__":
+    # Load and set hotkey BEFORE creating tray icon
+    start_hotkey_listener()
     create_tray_icon()
-    threading.Thread(target=start_hotkey_listener, daemon=True).start()
     root.mainloop()
