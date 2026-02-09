@@ -2,6 +2,7 @@ import tkinter as tk
 import configparser
 import webbrowser
 import threading
+import subprocess
 import pystray
 from pystray import MenuItem as item
 from PIL import Image
@@ -454,7 +455,10 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
 # === Tray Icon ===
 def open_config():
     config_path = get_config_path()
-    os.system(f"notepad.exe \"{config_path}\"")
+    try:
+        subprocess.Popen(["notepad.exe", config_path])
+    except Exception as e:
+        print(f"Error opening config: {e}")
 
 def exit_app(icon, item):
     icon.stop()
