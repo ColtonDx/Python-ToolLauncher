@@ -188,6 +188,14 @@ def show_popup():
     CURRENT_POPUP.configure(bg=bg_color)
     CURRENT_POPUP.attributes("-topmost", True)
     CURRENT_POPUP.focus_force()
+    
+    # Set window icon
+    try:
+        icon_path = resource_path(ICON_FILE)
+        if os.path.exists(icon_path):
+            CURRENT_POPUP.iconbitmap(icon_path)
+    except Exception:
+        pass
 
     # Create header frame with title and settings button
     header_frame = tk.Frame(CURRENT_POPUP, bg=bg_color)
@@ -539,15 +547,22 @@ def start_hotkey_listener():
 
 # === Main ===
 root = tk.Tk()
-root.withdraw()
 
-# Set window icon
+# Set window icon BEFORE withdrawing
 try:
     icon_path = resource_path(ICON_FILE)
     if os.path.exists(icon_path):
         root.iconbitmap(icon_path)
+    else:
+        # Try without path if file not found (for development)
+        try:
+            root.iconbitmap(ICON_FILE)
+        except Exception:
+            pass
 except Exception:
     pass
+
+root.withdraw()
 
 if __name__ == "__main__":
     # Ensure config file exists and create if necessary
