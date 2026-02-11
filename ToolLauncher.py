@@ -62,7 +62,13 @@ def launch_tool(target):
 # === Load Config ===
 def get_config_path():
     """Get the full path to the config file in AppData."""
-    appdata_dir = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "ToolLauncher")
+    # Use APPDATA environment variable for more reliable path resolution
+    appdata = os.getenv("APPDATA")
+    if not appdata:
+        # Fallback to expanduser if APPDATA is not set
+        appdata = os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+    
+    appdata_dir = os.path.join(appdata, "ToolLauncher")
     return os.path.join(appdata_dir, CONFIG_FILE)
 
 def ensure_config_exists():
@@ -70,10 +76,14 @@ def ensure_config_exists():
     config_path = get_config_path()
     config_dir = os.path.dirname(config_path)
     
+    print(f"Config directory: {config_dir}")
+    print(f"Config path: {config_path}")
+    
     # Create AppData directory if it doesn't exist
     if not os.path.exists(config_dir):
         try:
             os.makedirs(config_dir, exist_ok=True)
+            print(f"Created directory: {config_dir}")
         except Exception as e:
             print(f"Error creating config directory: {e}")
             return
@@ -99,9 +109,16 @@ def ensure_config_exists():
             # Save the default config
             with open(config_path, 'w') as f:
                 config.write(f)
-            print(f"Created default config at: {config_path}")
+            
+            # Verify file was created
+            if os.path.exists(config_path):
+                print(f"Successfully created config at: {config_path}")
+            else:
+                print(f"Warning: Config file was not created at: {config_path}")
         except Exception as e:
             print(f"Error creating default config: {e}")
+    else:
+        print(f"Config already exists at: {config_path}")
 
 def load_tools():
     config = configparser.ConfigParser()
@@ -455,6 +472,16 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
 # === Tray Icon ===
 def open_config():
     config_path = get_config_path()
+    
+    # Ensure config exists first
+    if not os.path.exists(config_path):
+        ensure_config_exists()
+    
+    # Verify file exists before trying to open
+    if not os.path.exists(config_path):
+        print(f"Error: Config file not found at {config_path}")
+        return
+    
     try:
         subprocess.Popen(["notepad.exe", config_path])
     except Exception as e:
