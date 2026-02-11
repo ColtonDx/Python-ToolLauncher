@@ -77,55 +77,16 @@ def ensure_config_exists():
     config_path = get_config_path()
     config_dir = os.path.dirname(config_path)
     
-    # === SANDBOX DETECTION ===
-    print("\n" + "="*60)
-    print("[DIAGNOSTICS] ENVIRONMENT & SANDBOX CHECK")
-    print("="*60)
-    print(f"Python executable: {sys.executable}")
-    print(f"Python version: {sys.version}")
-    print(f"Running from PyInstaller: {hasattr(sys, '_MEIPASS')}")
-    if hasattr(sys, '_MEIPASS'):
-        print(f"PyInstaller temp dir: {sys._MEIPASS}")
-    print(f"Script location: {os.path.abspath(__file__)}")
-    print(f"Current working directory: {os.getcwd()}")
-    print(f"APPDATA env var: {os.getenv('APPDATA')}")
-    print(f"USERNAME env var: {os.getenv('USERNAME')}")
-    print("="*60 + "\n")
-    
-    print(f"[DEBUG] Config directory: {config_dir}")
-    print(f"[DEBUG] Config path: {config_path}")
-    print(f"[DEBUG] Config directory exists: {os.path.exists(config_dir)}")
-    print(f"[DEBUG] Config file exists: {os.path.exists(config_path)}")
-    
     # Create AppData directory if it doesn't exist
     if not os.path.exists(config_dir):
         try:
-            print(f"[DEBUG] Attempting to create directory: {config_dir}")
             os.makedirs(config_dir, exist_ok=True)
-            print(f"[DEBUG] Created directory: {config_dir}")
-            print(f"[DEBUG] Directory now exists: {os.path.exists(config_dir)}")
-            
-            # Try to list parent directory to verify
-            parent_dir = os.path.dirname(config_dir)
-            print(f"[DEBUG] Parent directory: {parent_dir}")
-            print(f"[DEBUG] Parent directory exists: {os.path.exists(parent_dir)}")
-            if os.path.exists(parent_dir):
-                try:
-                    contents = os.listdir(parent_dir)
-                    print(f"[DEBUG] Parent directory contents: {contents}")
-                except Exception as e:
-                    print(f"[DEBUG] Could not list parent directory: {e}")
-        except Exception as e:
-            print(f"[ERROR] Failed to create directory: {e}")
-            print(f"[ERROR] Config directory permission check: {os.access(os.path.dirname(config_dir), os.W_OK)}")
+        except Exception:
             return
-    else:
-        print(f"[DEBUG] Directory already exists: {config_dir}")
     
     # Create default config if it doesn't exist
     if not os.path.exists(config_path):
         try:
-            print(f"[DEBUG] Creating new config file...")
             config = configparser.ConfigParser()
             
             # Add Settings section with default hotkey
@@ -142,33 +103,10 @@ def ensure_config_exists():
             }
             
             # Save the default config
-            print(f"[DEBUG] Writing config to: {config_path}")
             with open(config_path, 'w') as f:
                 config.write(f)
-                f.flush()
-            
-            print(f"[DEBUG] File write completed")
-            
-            # Verify file was created
-            time.sleep(0.1)  # Small delay to ensure file is written
-            
-            if os.path.exists(config_path):
-                file_size = os.path.getsize(config_path)
-                print(f"[SUCCESS] Config file created: {config_path} (size: {file_size} bytes)")
-                # List the directory to see what was created
-                try:
-                    dir_contents = os.listdir(config_dir)
-                    print(f"[DEBUG] Directory contents after write: {dir_contents}")
-                except Exception as e:
-                    print(f"[DEBUG] Could not list directory: {e}")
-            else:
-                print(f"[ERROR] Config file was not created at: {config_path}")
-        except Exception as e:
-            import traceback
-            print(f"[ERROR] Failed to create config: {e}")
-            print(f"[ERROR] Traceback: {traceback.format_exc()}")
-    else:
-        print(f"[DEBUG] Config already exists at: {config_path}")
+        except Exception:
+            pass
 
 def load_tools():
     config = configparser.ConfigParser()
@@ -379,17 +317,15 @@ def save_config(config):
     try:
         with open(config_path, 'w') as f:
             config.write(f)
-        print("Configuration saved successfully")
         return True
-    except Exception as e:
-        print(f"Error saving configuration: {e}")
+    except Exception:
         return False
 
 def show_settings_dialog(parent_window, dark, bg_color, fg_color):
     """Show settings dialog for hotkey and adding new tools."""
     settings_window = tk.Toplevel(parent_window)
     settings_window.title("Settings")
-    settings_window.geometry("480x420+700+350")
+    settings_window.geometry("500x600+700+300")
     settings_window.configure(bg=bg_color)
     settings_window.attributes("-topmost", True)
     
@@ -402,54 +338,62 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
     subtext_color = "#999999" if dark else "#666666"
     entry_bg = "#2d2d2d" if dark else "#ffffff"
     entry_fg = "#ffffff" if dark else "#000000"
-    border_color = "#3e3e42" if dark else "#d0d0d0"
     
-    # Configure styles for cleaner look
-    settings_window.option_add("*Font", "Segoe UI 10")
+    # === Create scrollable frame using canvas ===
+    canvas = tk.Canvas(settings_window, bg=bg_color, highlightthickness=0)
+    scrollbar = tk.Scrollbar(settings_window, orient=tk.VERTICAL, command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg=bg_color)
     
-    # === Main content frame ===
-    main_frame = tk.Frame(settings_window, bg=bg_color)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+    
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+    
+    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=20, pady=15)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
     
     # === Hotkey Section ===
-    tk.Label(main_frame, text="Hotkey", bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 8))
+    tk.Label(scrollable_frame, text="Hotkey", bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 8))
     
     current_hotkey = get_configured_hotkey()
-    hotkey_entry = tk.Entry(main_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
-                            relief=tk.SOLID, borderwidth=1)
+    hotkey_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                            relief=tk.SOLID, borderwidth=1, width=30)
     hotkey_entry.insert(0, current_hotkey)
     hotkey_entry.pack(fill=tk.X, pady=(0, 4))
     
-    tk.Label(main_frame, text="e.g., ctrl+alt+f, shift+alt+d, ctrl+shift+t", 
+    tk.Label(scrollable_frame, text="e.g., ctrl+alt+f, shift+alt+d, ctrl+shift+t", 
              bg=bg_color, fg=subtext_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 15))
     
     # === Add New Tool Section ===
-    tk.Label(main_frame, text="Add New Tool", bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 8))
+    tk.Label(scrollable_frame, text="Add New Tool", bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 8))
     
-    # Tool entry fields (compact layout)
-    fields = [
-        ("Tool Name", "tool_name_entry"),
-        ("URL/Path/Command", "tool_target_entry"),
-        ("Description (optional)", "tool_desc_entry"),
-        ("Category (optional)", "tool_cat_entry")
-    ]
+    # Tool entry fields
+    tk.Label(scrollable_frame, text="Tool Name", bg=bg_color, fg=fg_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 3))
+    tool_name_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                              relief=tk.SOLID, borderwidth=1)
+    tool_name_entry.pack(fill=tk.X, pady=(0, 10))
     
-    entry_vars = {}
-    for label, var_name in fields:
-        tk.Label(main_frame, text=label, bg=bg_color, fg=fg_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 3))
-        entry = tk.Entry(main_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
-                        relief=tk.SOLID, borderwidth=1)
-        entry.pack(fill=tk.X, pady=(0, 8))
-        entry_vars[var_name] = entry
+    tk.Label(scrollable_frame, text="URL/Path/Command", bg=bg_color, fg=fg_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 3))
+    tool_target_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                                relief=tk.SOLID, borderwidth=1)
+    tool_target_entry.pack(fill=tk.X, pady=(0, 10))
     
-    tool_name_entry = entry_vars["tool_name_entry"]
-    tool_target_entry = entry_vars["tool_target_entry"]
-    tool_desc_entry = entry_vars["tool_desc_entry"]
-    tool_cat_entry = entry_vars["tool_cat_entry"]
+    tk.Label(scrollable_frame, text="Description (optional)", bg=bg_color, fg=fg_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 3))
+    tool_desc_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                              relief=tk.SOLID, borderwidth=1)
+    tool_desc_entry.pack(fill=tk.X, pady=(0, 10))
     
-    # === Button Frame ===
+    tk.Label(scrollable_frame, text="Category (optional)", bg=bg_color, fg=fg_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 3))
+    tool_cat_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                             relief=tk.SOLID, borderwidth=1)
+    tool_cat_entry.pack(fill=tk.X, pady=(0, 20))
+    
+    # === Button Frame (outside scroll area) ===
     button_frame = tk.Frame(settings_window, bg=bg_color)
-    button_frame.pack(pady=(15, 10), fill=tk.X, padx=20)
+    button_frame.pack(pady=(0, 10), fill=tk.X, padx=20)
     
     def save_settings():
         """Save hotkey and new tool to config."""
@@ -462,9 +406,8 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
                 if 'Settings' not in config:
                     config['Settings'] = {}
                 config['Settings']['hotkey'] = new_hotkey
-                print(f"Hotkey updated to: {new_hotkey}")
-            except Exception as e:
-                print(f"Error setting hotkey: {e}")
+            except Exception:
+                pass
         
         # Add new tool if fields are filled
         tool_name = tool_name_entry.get().strip()
@@ -492,8 +435,6 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
             
             if tool_cat_entry.get().strip():
                 config[unique_name]['category'] = tool_cat_entry.get().strip()
-            
-            print(f"Tool added: {tool_name}")
         
         # Save config
         if save_config(config):
@@ -529,13 +470,12 @@ def open_config():
     
     # Verify file exists before trying to open
     if not os.path.exists(config_path):
-        print(f"Error: Config file not found at {config_path}")
         return
     
     try:
         subprocess.Popen(["notepad.exe", config_path])
-    except Exception as e:
-        print(f"Error opening config: {e}")
+    except Exception:
+        pass
 
 def exit_app(icon, item):
     icon.stop()
