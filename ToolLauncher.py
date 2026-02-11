@@ -2,6 +2,8 @@ import tkinter as tk
 import configparser
 import webbrowser
 import threading
+import subprocess
+import time
 import pystray
 from pystray import MenuItem as item
 from PIL import Image
@@ -60,8 +62,51 @@ def launch_tool(target):
 
 # === Load Config ===
 def get_config_path():
-    """Get the full path to the config file."""
-    return resource_path(CONFIG_FILE)
+    """Get the full path to the config file in AppData."""
+    # Use APPDATA environment variable for more reliable path resolution
+    appdata = os.getenv("APPDATA")
+    if not appdata:
+        # Fallback to expanduser if APPDATA is not set
+        appdata = os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+    
+    appdata_dir = os.path.join(appdata, "ToolLauncher")
+    return os.path.join(appdata_dir, CONFIG_FILE)
+
+def ensure_config_exists():
+    """Ensure the config file exists and create default one if not."""
+    config_path = get_config_path()
+    config_dir = os.path.dirname(config_path)
+    
+    # Create AppData directory if it doesn't exist
+    if not os.path.exists(config_dir):
+        try:
+            os.makedirs(config_dir, exist_ok=True)
+        except Exception:
+            return
+    
+    # Create default config if it doesn't exist
+    if not os.path.exists(config_path):
+        try:
+            config = configparser.ConfigParser()
+            
+            # Add Settings section with default hotkey
+            config['Settings'] = {
+                'hotkey': DEFAULT_HOTKEY
+            }
+            
+            # Add a sample tool section
+            config['Sample_Tool'] = {
+                'label': 'Open Notepad',
+                'path': 'notepad.exe',
+                'description': 'Launch Windows Notepad',
+                'category': 'Utilities'
+            }
+            
+            # Save the default config
+            with open(config_path, 'w') as f:
+                config.write(f)
+        except Exception:
+            pass
 
 def load_tools():
     config = configparser.ConfigParser()
@@ -143,6 +188,14 @@ def show_popup():
     CURRENT_POPUP.configure(bg=bg_color)
     CURRENT_POPUP.attributes("-topmost", True)
     CURRENT_POPUP.focus_force()
+    
+    # Set window icon
+    try:
+        icon_path = resource_path(ICON_FILE)
+        if os.path.exists(icon_path):
+            CURRENT_POPUP.iconbitmap(icon_path)
+    except Exception:
+        pass
 
     # Create header frame with title and settings button
     header_frame = tk.Frame(CURRENT_POPUP, bg=bg_color)
@@ -272,19 +325,25 @@ def save_config(config):
     try:
         with open(config_path, 'w') as f:
             config.write(f)
-        print("Configuration saved successfully")
         return True
-    except Exception as e:
-        print(f"Error saving configuration: {e}")
+    except Exception:
         return False
 
 def show_settings_dialog(parent_window, dark, bg_color, fg_color):
     """Show settings dialog for hotkey and adding new tools."""
     settings_window = tk.Toplevel(parent_window)
     settings_window.title("Settings")
-    settings_window.geometry("500x600+700+350")
+    settings_window.geometry("500x600+700+300")
     settings_window.configure(bg=bg_color)
     settings_window.attributes("-topmost", True)
+    
+    # Set window icon
+    try:
+        icon_path = resource_path(ICON_FILE)
+        if os.path.exists(icon_path):
+            settings_window.iconbitmap(icon_path)
+    except Exception:
+        pass
     
     # Load current config
     config = configparser.ConfigParser()
@@ -292,33 +351,17 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
     if os.path.exists(config_path):
         config.read(config_path)
     
-    subtext_color = "#aaaaaa" if dark else "gray"
+    subtext_color = "#999999" if dark else "#666666"
     entry_bg = "#2d2d2d" if dark else "#ffffff"
     entry_fg = "#ffffff" if dark else "#000000"
     
-    # === Hotkey Section ===
-    hotkey_frame = tk.LabelFrame(settings_window, text="Hotkey Settings", 
-                                 bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold"))
-    hotkey_frame.pack(fill=tk.X, padx=15, pady=10)
+    # === Button Frame (at bottom) - pack FIRST so it stays at bottom ===
+    button_frame = tk.Frame(settings_window, bg=bg_color)
+    button_frame.pack(side=tk.BOTTOM, pady=10, fill=tk.X, padx=20)
     
-    tk.Label(hotkey_frame, text="Hotkey:", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(10, 3))
-    
-    current_hotkey = get_configured_hotkey()
-    hotkey_entry = tk.Entry(hotkey_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10), width=30)
-    hotkey_entry.insert(0, current_hotkey)
-    hotkey_entry.pack(padx=10, pady=(3, 5), fill=tk.X)
-    
-    tk.Label(hotkey_frame, text="(e.g., ctrl+alt+f, shift+alt+d, ctrl+shift+t)", 
-             bg=bg_color, fg=subtext_color, font=("Segoe UI", 9)).pack(anchor="w", padx=10, pady=(0, 10))
-    
-    # === Add New Tool Section ===
-    tool_frame = tk.LabelFrame(settings_window, text="Add New Tool", 
-                               bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold"))
-    tool_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
-    
-    # Create scrollable frame for tool entries
-    canvas = tk.Canvas(tool_frame, bg=bg_color, highlightthickness=0)
-    scrollbar = tk.Scrollbar(tool_frame, orient=tk.VERTICAL, command=canvas.yview)
+    # === Create scrollable frame using canvas ===
+    canvas = tk.Canvas(settings_window, bg=bg_color, highlightthickness=0)
+    scrollbar = tk.Scrollbar(settings_window, orient=tk.VERTICAL, command=canvas.yview)
     scrollable_frame = tk.Frame(canvas, bg=bg_color)
     
     scrollable_frame.bind(
@@ -329,29 +372,44 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
     canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
     canvas.configure(yscrollcommand=scrollbar.set)
     
-    # Tool entry fields
-    tk.Label(scrollable_frame, text="Tool Name:", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(10, 3))
-    tool_name_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10))
-    tool_name_entry.pack(padx=10, pady=(3, 10), fill=tk.X)
-    
-    tk.Label(scrollable_frame, text="URL/Path/Command:", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(3, 3))
-    tool_target_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10))
-    tool_target_entry.pack(padx=10, pady=(3, 10), fill=tk.X)
-    
-    tk.Label(scrollable_frame, text="Description (optional):", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(3, 3))
-    tool_desc_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10))
-    tool_desc_entry.pack(padx=10, pady=(3, 10), fill=tk.X)
-    
-    tk.Label(scrollable_frame, text="Category (optional):", bg=bg_color, fg=fg_color).pack(anchor="w", padx=10, pady=(3, 3))
-    tool_cat_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10))
-    tool_cat_entry.pack(padx=10, pady=(3, 10), fill=tk.X)
-    
-    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=20, pady=15)
     scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
     
-    # === Button Frame ===
-    button_frame = tk.Frame(settings_window, bg=bg_color)
-    button_frame.pack(pady=15, fill=tk.X, padx=15)
+    # === Hotkey Section ===
+    tk.Label(scrollable_frame, text="Hotkey", bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 8))
+    
+    current_hotkey = get_configured_hotkey()
+    hotkey_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                            relief=tk.SOLID, borderwidth=1, width=30)
+    hotkey_entry.insert(0, current_hotkey)
+    hotkey_entry.pack(fill=tk.X, pady=(0, 4))
+    
+    tk.Label(scrollable_frame, text="e.g., ctrl+alt+f, shift+alt+d, ctrl+shift+t", 
+             bg=bg_color, fg=subtext_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 15))
+    
+    # === Add New Tool Section ===
+    tk.Label(scrollable_frame, text="Add New Tool", bg=bg_color, fg=fg_color, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 8))
+    
+    # Tool entry fields
+    tk.Label(scrollable_frame, text="Tool Name", bg=bg_color, fg=fg_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 3))
+    tool_name_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                              relief=tk.SOLID, borderwidth=1)
+    tool_name_entry.pack(fill=tk.X, pady=(0, 10))
+    
+    tk.Label(scrollable_frame, text="URL/Path/Command", bg=bg_color, fg=fg_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 3))
+    tool_target_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                                relief=tk.SOLID, borderwidth=1)
+    tool_target_entry.pack(fill=tk.X, pady=(0, 10))
+    
+    tk.Label(scrollable_frame, text="Description (optional)", bg=bg_color, fg=fg_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 3))
+    tool_desc_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                              relief=tk.SOLID, borderwidth=1)
+    tool_desc_entry.pack(fill=tk.X, pady=(0, 10))
+    
+    tk.Label(scrollable_frame, text="Category (optional)", bg=bg_color, fg=fg_color, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 3))
+    tool_cat_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
+                             relief=tk.SOLID, borderwidth=1)
+    tool_cat_entry.pack(fill=tk.X, pady=(0, 20))
     
     def save_settings():
         """Save hotkey and new tool to config."""
@@ -364,9 +422,8 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
                 if 'Settings' not in config:
                     config['Settings'] = {}
                 config['Settings']['hotkey'] = new_hotkey
-                print(f"Hotkey updated to: {new_hotkey}")
-            except Exception as e:
-                print(f"Error setting hotkey: {e}")
+            except Exception:
+                pass
         
         # Add new tool if fields are filled
         tool_name = tool_name_entry.get().strip()
@@ -394,8 +451,6 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
             
             if tool_cat_entry.get().strip():
                 config[unique_name]['category'] = tool_cat_entry.get().strip()
-            
-            print(f"Tool added: {tool_name}")
         
         # Save config
         if save_config(config):
@@ -405,19 +460,38 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
                 parent_window.destroy()
             show_popup()
     
-    save_btn = tk.Button(button_frame, text="Save Settings", command=save_settings,
-                        bg="#0e639c" if dark else "#007acc", fg=fg_color,
-                        font=("Segoe UI", 10), relief=tk.FLAT, padx=15, pady=8)
-    save_btn.pack(side=tk.LEFT, padx=5)
+    save_btn = tk.Button(button_frame, text="Save", command=save_settings,
+                        bg="#0e639c" if dark else "#007acc", fg="#ffffff",
+                        font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=20, pady=6,
+                        cursor="hand2")
+    save_btn.pack(side=tk.LEFT, padx=(0, 8))
+    save_btn.configure(activebackground="#1177bb" if dark else "#0059b8")
+    save_btn.configure(activeforeground="#ffffff")
     
     cancel_btn = tk.Button(button_frame, text="Cancel", command=settings_window.destroy,
-                          bg="#3e3e42" if dark else "#cccccc", fg=fg_color,
-                          font=("Segoe UI", 10), relief=tk.FLAT, padx=15, pady=8)
-    cancel_btn.pack(side=tk.LEFT, padx=5)
+                          bg="#3e3e42" if dark else "#e0e0e0", fg=fg_color,
+                          font=("Segoe UI", 10), relief=tk.FLAT, padx=20, pady=6,
+                          cursor="hand2")
+    cancel_btn.pack(side=tk.LEFT)
+    cancel_btn.configure(activebackground="#555555" if dark else "#d0d0d0")
+    cancel_btn.configure(activeforeground=fg_color)
 
 # === Tray Icon ===
 def open_config():
-    os.system(f"notepad.exe {resource_path(CONFIG_FILE)}")
+    config_path = get_config_path()
+    
+    # Ensure config exists first
+    if not os.path.exists(config_path):
+        ensure_config_exists()
+    
+    # Verify file exists before trying to open
+    if not os.path.exists(config_path):
+        return
+    
+    try:
+        subprocess.Popen(["notepad.exe", config_path])
+    except Exception:
+        pass
 
 def exit_app(icon, item):
     icon.stop()
@@ -453,19 +527,16 @@ def update_hotkey(new_hotkey):
     if CURRENT_HOTKEY and CURRENT_HOTKEY != new_hotkey:
         try:
             keyboard.remove_hotkey(CURRENT_HOTKEY)
-        except Exception as e:
-            print(f"Note: Could not remove previous hotkey {CURRENT_HOTKEY}: {e}")
+        except Exception:
+            pass
     
     # Set new hotkey
     try:
         CURRENT_HOTKEY = new_hotkey
         keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
-        print(f"ToolLauncher hotkey set to: {CURRENT_HOTKEY}")
-    except Exception as e:
-        print(f"Error registering hotkey {new_hotkey}: {e}")
+    except Exception:
         # Fallback to default if there's an issue
         if new_hotkey != DEFAULT_HOTKEY:
-            print(f"Falling back to default hotkey: {DEFAULT_HOTKEY}")
             CURRENT_HOTKEY = DEFAULT_HOTKEY
             keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
 
@@ -476,9 +547,26 @@ def start_hotkey_listener():
 
 # === Main ===
 root = tk.Tk()
+
+# Set window icon BEFORE withdrawing
+try:
+    icon_path = resource_path(ICON_FILE)
+    if os.path.exists(icon_path):
+        root.iconbitmap(icon_path)
+    else:
+        # Try without path if file not found (for development)
+        try:
+            root.iconbitmap(ICON_FILE)
+        except Exception:
+            pass
+except Exception:
+    pass
+
 root.withdraw()
 
 if __name__ == "__main__":
+    # Ensure config file exists and create if necessary
+    ensure_config_exists()
     # Load and set hotkey BEFORE creating tray icon
     start_hotkey_listener()
     create_tray_icon()
