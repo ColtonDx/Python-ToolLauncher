@@ -3,6 +3,7 @@ import configparser
 import webbrowser
 import threading
 import subprocess
+import time
 import pystray
 from pystray import MenuItem as item
 from PIL import Image
@@ -76,21 +77,28 @@ def ensure_config_exists():
     config_path = get_config_path()
     config_dir = os.path.dirname(config_path)
     
-    print(f"Config directory: {config_dir}")
-    print(f"Config path: {config_path}")
+    print(f"[DEBUG] Config directory: {config_dir}")
+    print(f"[DEBUG] Config path: {config_path}")
+    print(f"[DEBUG] Config directory exists: {os.path.exists(config_dir)}")
+    print(f"[DEBUG] Config file exists: {os.path.exists(config_path)}")
     
     # Create AppData directory if it doesn't exist
     if not os.path.exists(config_dir):
         try:
             os.makedirs(config_dir, exist_ok=True)
-            print(f"Created directory: {config_dir}")
+            print(f"[DEBUG] Created directory: {config_dir}")
+            print(f"[DEBUG] Directory now exists: {os.path.exists(config_dir)}")
         except Exception as e:
-            print(f"Error creating config directory: {e}")
+            print(f"[ERROR] Failed to create directory: {e}")
+            print(f"[ERROR] Config directory permission check: {os.access(os.path.dirname(config_dir), os.W_OK)}")
             return
+    else:
+        print(f"[DEBUG] Directory already exists: {config_dir}")
     
     # Create default config if it doesn't exist
     if not os.path.exists(config_path):
         try:
+            print(f"[DEBUG] Creating new config file...")
             config = configparser.ConfigParser()
             
             # Add Settings section with default hotkey
@@ -107,18 +115,27 @@ def ensure_config_exists():
             }
             
             # Save the default config
+            print(f"[DEBUG] Writing config to: {config_path}")
             with open(config_path, 'w') as f:
                 config.write(f)
+                f.flush()
+            
+            print(f"[DEBUG] File write completed")
             
             # Verify file was created
+            time.sleep(0.1)  # Small delay to ensure file is written
+            
             if os.path.exists(config_path):
-                print(f"Successfully created config at: {config_path}")
+                file_size = os.path.getsize(config_path)
+                print(f"[SUCCESS] Config file created: {config_path} (size: {file_size} bytes)")
             else:
-                print(f"Warning: Config file was not created at: {config_path}")
+                print(f"[ERROR] Config file was not created at: {config_path}")
         except Exception as e:
-            print(f"Error creating default config: {e}")
+            import traceback
+            print(f"[ERROR] Failed to create config: {e}")
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
     else:
-        print(f"Config already exists at: {config_path}")
+        print(f"[DEBUG] Config already exists at: {config_path}")
 
 def load_tools():
     config = configparser.ConfigParser()
