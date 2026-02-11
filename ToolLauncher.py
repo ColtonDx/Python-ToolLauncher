@@ -77,6 +77,21 @@ def ensure_config_exists():
     config_path = get_config_path()
     config_dir = os.path.dirname(config_path)
     
+    # === SANDBOX DETECTION ===
+    print("\n" + "="*60)
+    print("[DIAGNOSTICS] ENVIRONMENT & SANDBOX CHECK")
+    print("="*60)
+    print(f"Python executable: {sys.executable}")
+    print(f"Python version: {sys.version}")
+    print(f"Running from PyInstaller: {hasattr(sys, '_MEIPASS')}")
+    if hasattr(sys, '_MEIPASS'):
+        print(f"PyInstaller temp dir: {sys._MEIPASS}")
+    print(f"Script location: {os.path.abspath(__file__)}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"APPDATA env var: {os.getenv('APPDATA')}")
+    print(f"USERNAME env var: {os.getenv('USERNAME')}")
+    print("="*60 + "\n")
+    
     print(f"[DEBUG] Config directory: {config_dir}")
     print(f"[DEBUG] Config path: {config_path}")
     print(f"[DEBUG] Config directory exists: {os.path.exists(config_dir)}")
@@ -85,9 +100,21 @@ def ensure_config_exists():
     # Create AppData directory if it doesn't exist
     if not os.path.exists(config_dir):
         try:
+            print(f"[DEBUG] Attempting to create directory: {config_dir}")
             os.makedirs(config_dir, exist_ok=True)
             print(f"[DEBUG] Created directory: {config_dir}")
             print(f"[DEBUG] Directory now exists: {os.path.exists(config_dir)}")
+            
+            # Try to list parent directory to verify
+            parent_dir = os.path.dirname(config_dir)
+            print(f"[DEBUG] Parent directory: {parent_dir}")
+            print(f"[DEBUG] Parent directory exists: {os.path.exists(parent_dir)}")
+            if os.path.exists(parent_dir):
+                try:
+                    contents = os.listdir(parent_dir)
+                    print(f"[DEBUG] Parent directory contents: {contents}")
+                except Exception as e:
+                    print(f"[DEBUG] Could not list parent directory: {e}")
         except Exception as e:
             print(f"[ERROR] Failed to create directory: {e}")
             print(f"[ERROR] Config directory permission check: {os.access(os.path.dirname(config_dir), os.W_OK)}")
@@ -128,6 +155,12 @@ def ensure_config_exists():
             if os.path.exists(config_path):
                 file_size = os.path.getsize(config_path)
                 print(f"[SUCCESS] Config file created: {config_path} (size: {file_size} bytes)")
+                # List the directory to see what was created
+                try:
+                    dir_contents = os.listdir(config_dir)
+                    print(f"[DEBUG] Directory contents after write: {dir_contents}")
+                except Exception as e:
+                    print(f"[DEBUG] Could not list directory: {e}")
             else:
                 print(f"[ERROR] Config file was not created at: {config_path}")
         except Exception as e:
