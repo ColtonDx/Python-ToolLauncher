@@ -4,11 +4,13 @@ ToolLauncher is a lightweight Windows utility that lets you launch your favorite
 
 **Features**
 
-- Hotkey-triggered launcher (default: Ctrl+Shift+b)  
+- Hotkey-triggered launcher (default: Ctrl+Alt+F)  
 - System tray icon with config access and exit  
 - Config-driven tool list with labels, URLs, and descriptions  
 - Dynamic window sizing based on number of tools  
-- Clean, minimal interface with subtext descriptions  
+- Clean, minimal interface with dark/light mode support  
+- Automatic config creation on first run  
+- Easy config editing via "Open Config" menu option  
 
 **Installation**
 
@@ -20,14 +22,27 @@ ToolLauncher is a lightweight Windows utility that lets you launch your favorite
    - pillow  
    - keyboard  
 4. Place your icon file as `ToolLauncher_Logo.ico` in the same directory  
-5. Create a config file named `ToolLauncher.conf`  
 
-**Config Format**
+**Config File**
 
-ToolLauncher.conf should use INI format. Each section defines a tool with a URL or Path, optional label, and optional description. Tools will be in columns defined by the category.
+The config file is automatically created on first run if it doesn't exist. 
+
+**Location:**
+- **Compiled EXE:** Same directory as the executable
+- **Development (Python script):** Same directory as ToolLauncher.py
+
+**Auto-Creation:**
+When you first run ToolLauncher, a default config file (`ToolLauncher.conf`) is automatically created with a sample tool (Notepad launcher). You can then customize it by using the "Open Config" option.
+
+**Format**
+
+ToolLauncher.conf uses INI format. Each section defines a tool with a URL or Path, optional label, description, and category. Tools are organized into columns by category.
 
 Example:
 ```
+[Settings]
+hotkey = ctrl+alt+f
+
 [Tool1]  
 label = Azure Portal  
 url = https://portal.azure.com  
@@ -44,15 +59,27 @@ path = C:\Windows\System32\calc.exe
 description = Windows Calculator
 category = Apps
 ```
+
 **Usage**
 
-- Run `ToolLauncher.py`  
-- Press Ctrl+alt+f to open the launcher  
-- Click any "Launch" button to open the corresponding URL  
-- Use the tray icon to open the config or exit the app  
+1. Run `ToolLauncher.py` or the compiled EXE  
+2. Press **Ctrl+Alt+F** (or your custom hotkey) to open the launcher  
+3. Click any tool button to launch it  
+4. **To edit the config:** Right-click the tray icon and select **"Open Config"** to open it in Notepad  
+5. After editing the config, restart the application for changes to take effect
 
 **Customization**
 
-- Change the hotkey by modifying the `HOTKEY` variable in the script  
-- Add or remove tools by editing `ToolLauncher.conf`  
-- Replace `ToolLauncher_Logo.ico` with your own icon  
+- **Change the hotkey:** Edit the `hotkey` setting in the Settings section of the config file, then right-click the tray icon and select "Open Config" to modify it  
+- **Add or remove tools:** Right-click the tray icon, select "Open Config", edit the file, and restart the application  
+- **Replace the icon:** Replace `ToolLauncher_Logo.ico` with your own icon file (must be in .ico format)  
+- **Categories:** Tools are automatically organized into columns based on their `category` field
+
+**Building an EXE**
+
+To package as a standalone EXE using PyInstaller:
+```
+pyinstaller --icon=ToolLauncher_Logo.ico --onefile --windowed ToolLauncher.py
+```
+
+Place the generated EXE and `ToolLauncher_Logo.ico` in the same folder for the app to function correctly.  
