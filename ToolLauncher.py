@@ -329,6 +329,14 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
     settings_window.configure(bg=bg_color)
     settings_window.attributes("-topmost", True)
     
+    # Set window icon
+    try:
+        icon_path = resource_path(ICON_FILE)
+        if os.path.exists(icon_path):
+            settings_window.iconbitmap(icon_path)
+    except Exception:
+        pass
+    
     # Load current config
     config = configparser.ConfigParser()
     config_path = get_config_path()
@@ -338,6 +346,10 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
     subtext_color = "#999999" if dark else "#666666"
     entry_bg = "#2d2d2d" if dark else "#ffffff"
     entry_fg = "#ffffff" if dark else "#000000"
+    
+    # === Button Frame (at bottom) - pack FIRST so it stays at bottom ===
+    button_frame = tk.Frame(settings_window, bg=bg_color)
+    button_frame.pack(side=tk.BOTTOM, pady=10, fill=tk.X, padx=20)
     
     # === Create scrollable frame using canvas ===
     canvas = tk.Canvas(settings_window, bg=bg_color, highlightthickness=0)
@@ -390,10 +402,6 @@ def show_settings_dialog(parent_window, dark, bg_color, fg_color):
     tool_cat_entry = tk.Entry(scrollable_frame, bg=entry_bg, fg=entry_fg, font=("Segoe UI", 10),
                              relief=tk.SOLID, borderwidth=1)
     tool_cat_entry.pack(fill=tk.X, pady=(0, 20))
-    
-    # === Button Frame (outside scroll area) ===
-    button_frame = tk.Frame(settings_window, bg=bg_color)
-    button_frame.pack(pady=(0, 10), fill=tk.X, padx=20)
     
     def save_settings():
         """Save hotkey and new tool to config."""
@@ -511,19 +519,16 @@ def update_hotkey(new_hotkey):
     if CURRENT_HOTKEY and CURRENT_HOTKEY != new_hotkey:
         try:
             keyboard.remove_hotkey(CURRENT_HOTKEY)
-        except Exception as e:
-            print(f"Note: Could not remove previous hotkey {CURRENT_HOTKEY}: {e}")
+        except Exception:
+            pass
     
     # Set new hotkey
     try:
         CURRENT_HOTKEY = new_hotkey
         keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
-        print(f"ToolLauncher hotkey set to: {CURRENT_HOTKEY}")
-    except Exception as e:
-        print(f"Error registering hotkey {new_hotkey}: {e}")
+    except Exception:
         # Fallback to default if there's an issue
         if new_hotkey != DEFAULT_HOTKEY:
-            print(f"Falling back to default hotkey: {DEFAULT_HOTKEY}")
             CURRENT_HOTKEY = DEFAULT_HOTKEY
             keyboard.add_hotkey(CURRENT_HOTKEY, launch_popup)
 
@@ -535,6 +540,14 @@ def start_hotkey_listener():
 # === Main ===
 root = tk.Tk()
 root.withdraw()
+
+# Set window icon
+try:
+    icon_path = resource_path(ICON_FILE)
+    if os.path.exists(icon_path):
+        root.iconbitmap(icon_path)
+except Exception:
+    pass
 
 if __name__ == "__main__":
     # Ensure config file exists and create if necessary
